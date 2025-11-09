@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-// import 'package:provider/provider.dart';
+import 'package:provider/provider.dart';
 
-// import 'state/auth_provider.dart';
+import 'state/auth_provider.dart';
 // import 'state/dashboard_provider.dart';
-// import 'utils/secure_storage.dart';
-// import 'screens/login_screen.dart';
-// import 'screens/dashboard_screen.dart';
+import 'utils/secure_storage.dart';
+import 'screens/login_screen.dart';
+import 'screens/dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(); // Load .env file before app starts
+  await dotenv.load(); // Load .env file
   runApp(MyApp());
 }
 
@@ -21,43 +21,43 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   String? _initialToken;
+  bool _checkingToken = true;
 
   @override
   void initState() {
     super.initState();
-    _loadStoredToken();
+    _loadToken();
   }
 
-  Future<void> _loadStoredToken() async {
+  Future<void> _loadToken() async {
     final token = await AppStorage.getAccessToken();
     setState(() {
-      _initialToken = token; // If null → user goes to login
+      _initialToken = token;
+      _checkingToken = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // While loading token, show splash-like loader
-    if (_initialToken == null) {
+    if (_checkingToken) {
       return MaterialApp(
-        home: Scaffold(body: Center(child: CircularProgressIndicator())),
+        home: Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
       );
     }
 
-    return MaterialApp(
-      home: Scaffold(body: Center(child: CircularProgressIndicator())),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        // ChangeNotifierProvider(create: (_) => DashboardProvider()),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'PS Mobile App',
+        theme: ThemeData(primarySwatch: Colors.blue),
+        home: _initialToken != null ? DashboardScreen() : LoginScreen(),
+      ),
     );
-    // return MultiProvider(
-    //   providers: [
-    //     ChangeNotifierProvider(create: (_) => AuthProvider()),
-    //     ChangeNotifierProvider(create: (_) => DashboardProvider()),
-    //   ],
-    //   child: MaterialApp(
-    //     debugShowCheckedModeBanner: false,
-    //     title: 'Order Management App',
-    //     theme: ThemeData(primarySwatch: Colors.blue),
-    //     home: _initialToken != null ? DashboardScreen() : LoginScreen(),
-    //   ),
-    // );
   }
 }
