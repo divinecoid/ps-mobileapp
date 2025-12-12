@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:ps_mobileapp_main/components/loading.dart';
-import 'package:ps_mobileapp_main/components/toast.dart';
 import 'package:ps_mobileapp_main/components/app_drawer.dart';
-import 'package:ps_mobileapp_main/screens/login_screen.dart';
-import 'package:ps_mobileapp_main/screens/outbound_screen.dart';
-import 'package:ps_mobileapp_main/screens/inbound_screen.dart';
-import 'package:ps_mobileapp_main/screens/reject_screen.dart';
-import 'package:ps_mobileapp_main/screens/order_screen.dart';
+import 'package:ps_mobileapp_main/utils/navigation_helper.dart';
 import 'package:ps_mobileapp_main/state/auth_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:ps_mobileapp_main/components/toast.dart';
+import 'package:ps_mobileapp_main/screens/login_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -41,50 +38,7 @@ class _DashboardScreen extends State<DashboardScreen> {
   }
 
   void _handleMenuSelection(String menu) {
-    switch (menu) {
-      case 'dashboard':
-        // Already on dashboard screen
-        break;
-      case 'order':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => OrderScreen()),
-        );
-        break;
-      case 'order_saya':
-        // TODO: Navigate to order saya screen
-        break;
-      case 'outbound':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => OutboundScreen()),
-        );
-        break;
-      case 'inbound':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => InboundScreen()),
-        );
-        break;
-      case 'reject':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => RejectScreen()),
-        );
-        break;
-      case 'daily_statistics':
-        // TODO: Navigate to daily statistics screen
-        break;
-      case 'stock_opname':
-        // TODO: Navigate to stock opname screen
-        break;
-      case 'mutasi':
-        // TODO: Navigate to mutasi screen
-        break;
-      case 'logout':
-        _handleLogout();
-        break;
-    }
+    NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'dashboard', usePush: true);
   }
 
   @override

@@ -1,38 +1,12 @@
 import 'package:flutter/material.dart';
 import '../components/app_drawer.dart';
-import 'outbound_screen.dart';
-import 'inbound_screen.dart';
+import '../utils/navigation_helper.dart';
 
 class RejectScreen extends StatelessWidget {
   const RejectScreen({super.key});
 
   void _handleMenuSelection(BuildContext context, String menu) {
-    switch (menu) {
-      case 'outbound':
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => OutboundScreen()),
-        );
-        break;
-      case 'inbound':
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => InboundScreen()),
-        );
-        break;
-      case 'reject':
-        // Already on reject screen
-        break;
-      case 'daily_statistics':
-        // TODO: Navigate to daily statistics screen
-        break;
-      case 'stock_opname':
-        // TODO: Navigate to stock opname screen
-        break;
-      case 'mutasi':
-        // TODO: Navigate to mutasi screen
-        break;
-    }
+    NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'reject');
   }
 
   @override

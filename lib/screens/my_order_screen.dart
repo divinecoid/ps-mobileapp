@@ -2,23 +2,16 @@ import 'package:flutter/material.dart';
 import '../components/app_drawer.dart';
 import '../utils/navigation_helper.dart';
 
-class OrderScreen extends StatefulWidget {
-  const OrderScreen({super.key});
+class MyOrderScreen extends StatefulWidget {
+  const MyOrderScreen({super.key});
 
   @override
-  State<OrderScreen> createState() => _OrderScreenState();
+  State<MyOrderScreen> createState() => _MyOrderScreenState();
 }
 
-class _OrderScreenState extends State<OrderScreen> {
-  // Track assigned orders (using customer name as ID for now)
-  final Set<String> _assignedOrders = {};
-  
-  // Multi-select mode
-  bool _isMultiSelectMode = false;
-  final Set<String> _selectedOrders = {};
-
-  // Dummy data orders with items
-  final List<Map<String, dynamic>> _orders = [
+class _MyOrderScreenState extends State<MyOrderScreen> {
+  // Dummy data orders with items (only assigned orders)
+  final List<Map<String, dynamic>> _myOrders = [
     {
       'id': '1',
       'customerName': 'Randy Khengdy',
@@ -29,18 +22,6 @@ class _OrderScreenState extends State<OrderScreen> {
       'items': [
         {'name': 'POLO BLACK XXL CUSTOM', 'qty': 1},
         {'name': 'POLO WHITE XXL', 'qty': 2},
-      ],
-    },
-    {
-      'id': '2',
-      'customerName': 'William',
-      'address': 'Apt. Sudirman Mansion',
-      'totalItems': 7,
-      'deliveryType': 'SiCepat - Sameday Service',
-      'notes': 'Kirim Bang',
-      'items': [
-        {'name': 'T-Shirt Red M', 'qty': 3},
-        {'name': 'T-Shirt Blue L', 'qty': 4},
       ],
     },
     {
@@ -57,32 +38,7 @@ class _OrderScreenState extends State<OrderScreen> {
       ],
     },
     {
-      'id': '4',
-      'customerName': 'Budi Santoso',
-      'address': 'Jl. Gatot Subroto No. 88, Jakarta Selatan',
-      'totalItems': 4,
-      'deliveryType': 'GoSend - Same Day',
-      'notes': null,
-      'items': [
-        {'name': 'Jaket Hoodie Hitam XL', 'qty': 2},
-        {'name': 'Jaket Hoodie Abu-abu L', 'qty': 2},
-      ],
-    },
-    {
       'id': '5',
-      'customerName': 'Lisa Permata',
-      'address': 'Komplek Permata Hijau Blok A No. 12',
-      'totalItems': 6,
-      'deliveryType': 'J&T Express - Ekspres',
-      'notes': 'Tolong dibungkus rapi',
-      'items': [
-        {'name': 'Dress Merah M', 'qty': 1},
-        {'name': 'Dress Biru S', 'qty': 2},
-        {'name': 'Dress Putih L', 'qty': 3},
-      ],
-    },
-    {
-      'id': '6',
       'customerName': 'Ahmad Fauzi',
       'address': 'Jl. Sudirman Kav. 52-53, Jakarta',
       'totalItems': 8,
@@ -94,22 +50,10 @@ class _OrderScreenState extends State<OrderScreen> {
         {'name': 'Celana Chino Coklat 33', 'qty': 3},
       ],
     },
-    {
-      'id': '7',
-      'customerName': 'Dewi Sari',
-      'address': 'Jl. Kemang Raya No. 45, Jakarta Selatan',
-      'totalItems': 3,
-      'deliveryType': 'GRAB - Instan',
-      'notes': 'Tolong diantar sebelum jam 5 sore',
-      'items': [
-        {'name': 'Blouse Putih M', 'qty': 1},
-        {'name': 'Blouse Pink L', 'qty': 2},
-      ],
-    },
   ];
 
   void _handleMenuSelection(String menu) {
-    NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'order');
+    NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'order_saya');
   }
 
   @override
@@ -131,86 +75,79 @@ class _OrderScreenState extends State<OrderScreen> {
           ),
         ),
         centerTitle: true,
-        actions: [
-          if (_isMultiSelectMode)
-            IconButton(
-              icon: Icon(Icons.person_add, color: Colors.white),
-              onPressed: _selectedOrders.isEmpty
-                  ? null
-                  : () {
-                      _assignMultipleOrders();
-                    },
-              tooltip: 'Assign to me',
-            ),
-          if (_isMultiSelectMode)
-            IconButton(
-              icon: Icon(Icons.close, color: Colors.white),
-              onPressed: () {
-                setState(() {
-                  _isMultiSelectMode = false;
-                  _selectedOrders.clear();
-                });
-              },
-              tooltip: 'Cancel selection',
-            ),
-        ],
       ),
       drawer: AppDrawer(
         onMenuSelected: (menu) => _handleMenuSelection(menu),
       ),
       body: Column(
         children: [
-          // Filter Button
+          // Header Section
           Container(
             padding: EdgeInsets.all(16),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  // TODO: Implement filter functionality
-                },
-                icon: Icon(Icons.filter_list, color: Colors.white),
-                label: Text(
-                  'Filter',
-                  style: TextStyle(color: Colors.white),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.list_alt,
+                  color: Colors.blue.shade700,
+                  size: 28,
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue.shade700,
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                SizedBox(width: 12),
+                Text(
+                  'Order Saya',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[900],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
 
           // Orders List
           Expanded(
-            child: ListView.builder(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _orders.length,
-              itemBuilder: (context, index) {
-                final order = _orders[index];
-                final isAssigned = _assignedOrders.contains(order['id']);
-                final isSelected = _selectedOrders.contains(order['id']);
-                return _buildOrderCard(order, isAssigned, isSelected);
-              },
-            ),
+            child: _myOrders.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.inbox,
+                          size: 80,
+                          color: Colors.grey[300],
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Belum ada order yang di-assign',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _myOrders.length,
+                    itemBuilder: (context, index) {
+                      final order = _myOrders[index];
+                      return _buildOrderCard(order);
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildOrderCard(Map<String, dynamic> order, bool isAssigned, bool isSelected) {
+  Widget _buildOrderCard(Map<String, dynamic> order) {
     return Container(
       margin: EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: isSelected
-            ? Border.all(color: Colors.blue.shade700, width: 3)
-            : isAssigned
-                ? Border.all(color: Colors.blue.shade700, width: 2)
-                : null,
+        border: Border.all(color: Colors.blue.shade700, width: 2),
         boxShadow: [
           BoxShadow(
             color: Colors.grey.withValues(alpha: 0.1),
@@ -222,23 +159,7 @@ class _OrderScreenState extends State<OrderScreen> {
       ),
       child: InkWell(
         onTap: () {
-          if (_isMultiSelectMode) {
-            setState(() {
-              if (isSelected) {
-                _selectedOrders.remove(order['id']);
-              } else {
-                _selectedOrders.add(order['id']);
-              }
-            });
-          } else {
-            _showOrderDetail(order);
-          }
-        },
-        onLongPress: () {
-          setState(() {
-            _isMultiSelectMode = true;
-            _selectedOrders.add(order['id']);
-          });
+          _showOrderDetail(order);
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(
@@ -246,32 +167,9 @@ class _OrderScreenState extends State<OrderScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Customer Name with Assigned Badge and Checkbox
+              // Customer Name with Assigned Badge
               Row(
                 children: [
-                  if (_isMultiSelectMode)
-                    Padding(
-                      padding: EdgeInsets.only(right: 12),
-                      child: Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: isSelected ? Colors.blue.shade700 : Colors.transparent,
-                          border: Border.all(
-                            color: isSelected ? Colors.blue.shade700 : Colors.grey[400]!,
-                            width: 2,
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: isSelected
-                            ? Icon(
-                                Icons.check,
-                                color: Colors.white,
-                                size: 18,
-                              )
-                            : null,
-                      ),
-                    ),
                   Expanded(
                     child: Text(
                       order['customerName'],
@@ -282,22 +180,21 @@ class _OrderScreenState extends State<OrderScreen> {
                       ),
                     ),
                   ),
-                  if (isAssigned && !_isMultiSelectMode)
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade700,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'ASSIGNED',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade700,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'ASSIGNED',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
+                  ),
                 ],
               ),
               SizedBox(height: 12),
@@ -403,8 +300,6 @@ class _OrderScreenState extends State<OrderScreen> {
   }
 
   void _showOrderDetail(Map<String, dynamic> order) {
-    final isAssigned = _assignedOrders.contains(order['id']);
-    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -427,7 +322,7 @@ class _OrderScreenState extends State<OrderScreen> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            
+
             // Header
             Padding(
               padding: EdgeInsets.all(16),
@@ -450,9 +345,9 @@ class _OrderScreenState extends State<OrderScreen> {
                 ],
               ),
             ),
-            
+
             Divider(),
-            
+
             // Content
             Expanded(
               child: SingleChildScrollView(
@@ -517,9 +412,9 @@ class _OrderScreenState extends State<OrderScreen> {
                         ],
                       ),
                     ),
-                    
+
                     SizedBox(height: 16),
-                    
+
                     // Items List Card
                     Container(
                       padding: EdgeInsets.all(16),
@@ -565,7 +460,7 @@ class _OrderScreenState extends State<OrderScreen> {
                 ),
               ),
             ),
-            
+
             // Action Buttons
             Container(
               padding: EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -576,106 +471,68 @@ class _OrderScreenState extends State<OrderScreen> {
               child: SafeArea(
                 top: false,
                 child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // TODO: Implement print functionality
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey[300],
-                        padding: EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          // TODO: Implement print functionality
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey[300],
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        'PRINT',
-                        style: TextStyle(
-                          color: Colors.grey[900],
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (isAssigned) {
-                          _unassignOrder(order['id']);
-                        } else {
-                          _assignOrder(order['id']);
-                        }
-                        Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isAssigned ? Colors.orange.shade700 : Colors.blue.shade700,
-                        padding: EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        isAssigned ? 'LEMPAR ORDERAN' : 'AMBIL ORDERAN',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                        child: Text(
+                          'PRINT',
+                          style: TextStyle(
+                            color: Colors.grey[900],
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          // Unassign order
+                          setState(() {
+                            _myOrders.removeWhere((o) => o['id'] == order['id']);
+                          });
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Order berhasil di-unassign'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange.shade700,
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          'LEMPAR ORDERAN',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  void _assignOrder(String orderId) {
-    setState(() {
-      _assignedOrders.add(orderId);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Order berhasil di-assign ke Anda'),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
-
-  void _unassignOrder(String orderId) {
-    setState(() {
-      _assignedOrders.remove(orderId);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Order berhasil di-unassign'),
-        backgroundColor: Colors.orange,
-      ),
-    );
-  }
-
-  void _assignMultipleOrders() {
-    if (_selectedOrders.isEmpty) return;
-
-    final count = _selectedOrders.length;
-    
-    setState(() {
-      _assignedOrders.addAll(_selectedOrders);
-      _selectedOrders.clear();
-      _isMultiSelectMode = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$count order berhasil di-assign ke Anda'),
-        backgroundColor: Colors.green,
       ),
     );
   }

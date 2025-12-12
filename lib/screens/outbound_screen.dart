@@ -4,9 +4,8 @@ import '../components/loading.dart';
 import '../components/toast.dart';
 import '../components/app_drawer.dart';
 import '../models/product.dart';
-import 'inbound_screen.dart';
-import 'reject_screen.dart';
 import 'prepare_items_screen.dart';
+import '../utils/navigation_helper.dart';
 
 class OutboundScreen extends StatefulWidget {
   const OutboundScreen({super.key});
@@ -279,32 +278,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
   }
 
   void _handleMenuSelection(String menu) {
-    switch (menu) {
-      case 'outbound':
-        // Already on outbound screen
-        break;
-      case 'inbound':
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => InboundScreen()),
-        );
-        break;
-      case 'reject':
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => RejectScreen()),
-        );
-        break;
-      case 'daily_statistics':
-        // TODO: Navigate to daily statistics screen
-        break;
-      case 'stock_opname':
-        // TODO: Navigate to stock opname screen
-        break;
-      case 'mutasi':
-        // TODO: Navigate to mutasi screen
-        break;
-    }
+    NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'outbound');
   }
 
   @override
