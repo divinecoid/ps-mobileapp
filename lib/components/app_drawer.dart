@@ -15,7 +15,7 @@ class AppDrawer extends StatefulWidget {
 }
 
 class _AppDrawerState extends State<AppDrawer> {
-  bool _isScanExpanded = false;
+  bool _isScanExpanded = true;
 
   void _handleMenuTap(String menuName) {
     // Close drawer first
@@ -115,6 +115,24 @@ class _AppDrawerState extends State<AppDrawer> {
                     ],
                   ),
                 ),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      'N',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -122,8 +140,35 @@ class _AppDrawerState extends State<AppDrawer> {
           // Menu Items
           Expanded(
             child: ListView(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 80),
               children: [
+                // Dashboard
+                _buildMenuCard(
+                  icon: Icons.dashboard,
+                  title: 'Dashboard',
+                  onTap: () => _handleMenuTap('dashboard'),
+                ),
+
+                SizedBox(height: 8),
+
+                // Order
+                _buildMenuCard(
+                  icon: Icons.shopping_cart,
+                  title: 'Order',
+                  onTap: () => _handleMenuTap('order'),
+                ),
+
+                SizedBox(height: 8),
+
+                // Order Saya
+                _buildMenuCard(
+                  icon: Icons.list_alt,
+                  title: 'Order Saya',
+                  onTap: () => _handleMenuTap('order_saya'),
+                ),
+
+                SizedBox(height: 8),
+
                 // Scan Menu (Expandable)
                 _buildExpandableScanMenu(),
 
@@ -147,11 +192,23 @@ class _AppDrawerState extends State<AppDrawer> {
 
                 SizedBox(height: 8),
 
+                SizedBox(height: 8),
+
                 // Mutasi
                 _buildMenuCard(
                   icon: Icons.swap_horiz,
                   title: 'Mutasi',
                   onTap: () => _handleMenuTap('mutasi'),
+                ),
+
+                SizedBox(height: 8),
+
+                // Log Out
+                _buildMenuCard(
+                  icon: Icons.logout,
+                  title: 'Log Out',
+                  onTap: () => _handleMenuTap('logout'),
+                  isLogout: true,
                 ),
               ],
             ),
@@ -219,28 +276,43 @@ class _AppDrawerState extends State<AppDrawer> {
             duration: Duration(milliseconds: 200),
             height: _isScanExpanded ? null : 0,
             child: _isScanExpanded
-                ? Column(
-                    children: [
-                      Divider(height: 1),
-                      _buildScanSubmenuItem(
-                        title: 'Outbound',
-                        icon: Icons.outbox,
-                        color: Colors.pink.shade300,
-                        onTap: () => _handleMenuTap('outbound'),
-                      ),
-                      _buildScanSubmenuItem(
-                        title: 'Inbound',
-                        icon: Icons.inbox,
-                        color: Colors.blue.shade300,
-                        onTap: () => _handleMenuTap('inbound'),
-                      ),
-                      _buildScanSubmenuItem(
-                        title: 'Reject',
-                        icon: Icons.cancel,
-                        color: Colors.orange.shade300,
-                        onTap: () => _handleMenuTap('reject'),
-                      ),
-                    ],
+                ? Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Column(
+                      children: [
+                        Divider(height: 1),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: _buildScanSubmenuItem(
+                            title: 'Outbound',
+                            icon: Icons.output,
+                            color: Colors.red.shade100,
+                            iconColor: Colors.red.shade700,
+                            onTap: () => _handleMenuTap('outbound'),
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: _buildScanSubmenuItem(
+                            title: 'Inbound',
+                            icon: Icons.input,
+                            color: Colors.blue.shade100,
+                            iconColor: Colors.blue.shade700,
+                            onTap: () => _handleMenuTap('inbound'),
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: _buildScanSubmenuItem(
+                            title: 'Reject',
+                            icon: Icons.cancel,
+                            color: Colors.yellow.shade100,
+                            iconColor: Colors.orange.shade600,
+                            onTap: () => _handleMenuTap('reject'),
+                          ),
+                        ),
+                      ],
+                    ),
                   )
                 : SizedBox.shrink(),
           ),
@@ -253,13 +325,53 @@ class _AppDrawerState extends State<AppDrawer> {
     required String title,
     required IconData icon,
     required Color color,
+    required Color iconColor,
     required VoidCallback onTap,
   }) {
+    // For Reject, use a circular container with white X
+    if (title == 'Reject') {
+      return InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: iconColor,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.close,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[900],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
     return InkWell(
       onTap: onTap,
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(8),
@@ -268,7 +380,7 @@ class _AppDrawerState extends State<AppDrawer> {
           children: [
             Icon(
               icon,
-              color: Colors.white,
+              color: iconColor,
               size: 20,
             ),
             SizedBox(width: 12),
@@ -277,7 +389,7 @@ class _AppDrawerState extends State<AppDrawer> {
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
-                color: Colors.white,
+                color: Colors.grey[900],
               ),
             ),
           ],
@@ -290,6 +402,7 @@ class _AppDrawerState extends State<AppDrawer> {
     required IconData icon,
     required String title,
     required VoidCallback onTap,
+    bool isLogout = false,
   }) {
     return InkWell(
       onTap: onTap,
@@ -297,7 +410,7 @@ class _AppDrawerState extends State<AppDrawer> {
       child: Container(
         padding: EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isLogout ? Colors.red.shade50 : Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
@@ -312,7 +425,7 @@ class _AppDrawerState extends State<AppDrawer> {
           children: [
             Icon(
               icon,
-              color: Colors.blue.shade700,
+              color: isLogout ? Colors.red.shade700 : Colors.blue.shade700,
               size: 24,
             ),
             SizedBox(width: 12),
@@ -322,7 +435,7 @@ class _AppDrawerState extends State<AppDrawer> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  color: Colors.grey[900],
+                  color: isLogout ? Colors.red.shade700 : Colors.grey[900],
                 ),
               ),
             ),

@@ -7,6 +7,7 @@ import 'package:ps_mobileapp_main/screens/login_screen.dart';
 import 'package:ps_mobileapp_main/screens/outbound_screen.dart';
 import 'package:ps_mobileapp_main/screens/inbound_screen.dart';
 import 'package:ps_mobileapp_main/screens/reject_screen.dart';
+import 'package:ps_mobileapp_main/screens/order_screen.dart';
 import 'package:ps_mobileapp_main/state/auth_provider.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -41,6 +42,18 @@ class _DashboardScreen extends State<DashboardScreen> {
 
   void _handleMenuSelection(String menu) {
     switch (menu) {
+      case 'dashboard':
+        // Already on dashboard screen
+        break;
+      case 'order':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => OrderScreen()),
+        );
+        break;
+      case 'order_saya':
+        // TODO: Navigate to order saya screen
+        break;
       case 'outbound':
         Navigator.push(
           context,
@@ -67,6 +80,9 @@ class _DashboardScreen extends State<DashboardScreen> {
         break;
       case 'mutasi':
         // TODO: Navigate to mutasi screen
+        break;
+      case 'logout':
+        _handleLogout();
         break;
     }
   }

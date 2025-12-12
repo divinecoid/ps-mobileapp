@@ -3,8 +3,10 @@ import 'barcode_scanner_screen.dart';
 import '../components/loading.dart';
 import '../components/toast.dart';
 import '../components/app_drawer.dart';
+import '../models/product.dart';
 import 'inbound_screen.dart';
 import 'reject_screen.dart';
+import 'prepare_items_screen.dart';
 
 class OutboundScreen extends StatefulWidget {
   const OutboundScreen({super.key});
@@ -18,6 +20,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
   String? _scannedResiNumber;
   bool _isScanningResi = false;
   bool _isScanningProduct = false;
+  bool _isOrderTaken = false; // Track apakah order sudah diambil
   List<Product> _products = [];
   Set<String> _scannedProductSkus = {};
 
@@ -38,7 +41,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
     {
       'sku': 'PL-MAR-XL',
       'nama': 'POLO Maroon XL',
-      'qty': 1,
+      'qty': 3,
       'lokasi': {
         'lantai': '1',
         'ruang': 'A',
@@ -47,14 +50,14 @@ class _OutboundScreenState extends State<OutboundScreen> {
       },
     },
     {
-      'sku': 'ON-WHT-S',
-      'nama': 'O-Neck Putih S',
-      'qty': 1,
+      'sku': 'TSH-BLK-M',
+      'nama': 'T-Shirt Hitam M',
+      'qty': 2,
       'lokasi': {
-        'lantai': '2',
-        'ruang': 'B',
-        'rak': '021',
-        'bin': '02',
+        'lantai': '1',
+        'ruang': 'C',
+        'rak': '031',
+        'bin': '03',
       },
     },
   ];
@@ -93,6 +96,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
           lokasi: p['lokasi'],
           isScanned: false,
         )).toList();
+        _isOrderTaken = false; // Reset state order taken
       });
 
       if (mounted) {
@@ -138,6 +142,15 @@ class _OutboundScreenState extends State<OutboundScreen> {
       if (mounted) {
         Toast.show(context, 'Produk ${product.nama} berhasil di-scan');
       }
+    }
+  }
+
+  void _takeOrder() {
+    setState(() {
+      _isOrderTaken = true;
+    });
+    if (mounted) {
+      Toast.show(context, 'Order berhasil diambil');
     }
   }
 
@@ -235,6 +248,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   _scannedResiNumber = null;
                   _products = [];
                   _scannedProductSkus = {};
+                  _isOrderTaken = false;
                 });
               },
               style: ElevatedButton.styleFrom(
@@ -521,6 +535,29 @@ class _OutboundScreenState extends State<OutboundScreen> {
           ),
         ),
         SizedBox(height: 16),
+        // Card: Batas Kirim
+        Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.green.shade50,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.calendar_today, color: Colors.green, size: 20),
+              SizedBox(width: 12),
+              Text(
+                'Batas Kirim: ${_dummyResiData['batasKirim']}',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[900],
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 16),
         // Card: Daftar Produk
         Card(
           shape: RoundedRectangleBorder(
@@ -553,60 +590,125 @@ class _OutboundScreenState extends State<OutboundScreen> {
           ),
         ),
         SizedBox(height: 16),
-        // Card: Status Resi
-        Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Icon(Icons.local_shipping, color: Colors.green, size: 32),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Siap kirim resi ${_dummyResiData['resiNumber']}',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        '${_products.where((p) => p.isReady).length}/${_products.length} produk prepared',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                    ],
-                  ),
+        // Tombol Ambil Order (muncul pertama kali setelah scan)
+        if (!_isOrderTaken) ...[
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _takeOrder,
+              icon: Icon(Icons.shopping_cart),
+              label: Text('AMBIL ORDER'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue.shade700,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: _markResiReady,
-                  icon: Icon(Icons.send),
-                  label: Text('RESI SIAP'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
+        // Tombol Siapkan Barang dan Card Status Resi (muncul setelah ambil order)
+        if (_isOrderTaken) ...[
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PrepareItemsScreen(
+                      products: _products,
+                      onProductScanned: (index, product) {
+                        setState(() {
+                          _products[index] = product;
+                        });
+                      },
+                      onProductReady: (index) {
+                        setState(() {
+                          _products[index] = Product(
+                            sku: _products[index].sku,
+                            nama: _products[index].nama,
+                            qty: _products[index].qty,
+                            lokasi: _products[index].lokasi,
+                            isScanned: _products[index].isScanned,
+                            isReady: true,
+                          );
+                        });
+                      },
+                    ),
+                  ),
+                );
+              },
+              icon: Icon(Icons.inventory_2),
+              label: Text('Siapkan Barang'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: 16),
+          // Card: Status Resi
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.local_shipping, color: Colors.green, size: 32),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Siap kirim resi ${_dummyResiData['resiNumber']}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          '${_products.where((p) => p.isReady).length}/${_products.length} produk prepared',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: _markResiReady,
+                    icon: Icon(Icons.send),
+                    label: Text('RESI SIAP'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
         SizedBox(height: 16), // Extra spacing at bottom to prevent overlap with system navigation bar
       ],
     );
@@ -644,17 +746,15 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
   Widget _buildProductCard(int index) {
     final product = _products[index];
-    final isCompleted = product.isReady;
-    final isScanned = product.isScanned;
 
     return Container(
-      margin: EdgeInsets.only(bottom: 16),
+      margin: EdgeInsets.only(bottom: 12),
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isCompleted ? Colors.green.shade50 : Colors.white,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isCompleted ? Colors.green.shade200 : Colors.grey.shade300,
+          color: Colors.grey.shade300,
         ),
       ),
       child: Column(
@@ -666,7 +766,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: isCompleted ? Colors.green : Colors.grey,
+                  color: Colors.grey,
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -704,132 +804,9 @@ class _OutboundScreenState extends State<OutboundScreen> {
               ),
             ],
           ),
-          SizedBox(height: 12),
-          Container(
-            padding: EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.green.shade50,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, color: Colors.green, size: 18),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Rekomendasi Lokasi: Lantai: ${product.lokasi['lantai']}, Ruang: ${product.lokasi['ruang']}, Rak: ${product.lokasi['rak']}, Bin: ${product.lokasi['bin']}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (isScanned) ...[
-            SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 18),
-                SizedBox(width: 6),
-                Text(
-                  'Produk telah di-scan',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.green.shade700,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ],
-          SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: isScanned
-                      ? null
-                      : () => _startScanProduct(index),
-                  icon: Icon(Icons.qr_code_scanner),
-                  label: Text('SCAN PRODUK'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isScanned ? Colors.grey : Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (isScanned && !isCompleted) ...[
-            SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _markProductReady(index),
-                icon: Icon(Icons.check),
-                label: Text('PRODUK SIAP'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-          ],
-          if (isCompleted) ...[
-            SizedBox(height: 8),
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.green.shade800),
-                  SizedBox(width: 8),
-                  Text(
-                    'PRODUK SIAP',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green.shade800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 }
 
-// Model untuk Product
-class Product {
-  final String sku;
-  final String nama;
-  final int qty;
-  final Map<String, String> lokasi;
-  final bool isScanned;
-  final bool isReady;
-
-  Product({
-    required this.sku,
-    required this.nama,
-    required this.qty,
-    required this.lokasi,
-    this.isScanned = false,
-    this.isReady = false,
-  });
-}
