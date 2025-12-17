@@ -1,4 +1,4 @@
-package com.example.ps_mobileapp_main
+package id.co.divine.ps_mobile
 
 import io.flutter.embedding.android.FlutterActivity
 
