@@ -33,17 +33,22 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   @override
   void initState() {
     super.initState();
+      // Konfigurasi khusus untuk QR code (mobile-friendly)
       controller = MobileScannerController(
-        cameraResolution: const Size(1920, 1080),
+        cameraResolution: const Size(1920, 1080), // High resolution untuk QR code yang jelas
         detectionSpeed: DetectionSpeed.normal,
         facing: CameraFacing.back,
         torchEnabled: false,
         autoStart: false,
-        formats: const [
-          BarcodeFormat.code128,
-          BarcodeFormat.pdf417,
-        ],
-    );
+        formats: widget.scanType == ScanType.qrCode
+            ? const [
+                BarcodeFormat.qrCode, // Khusus QR code untuk mobile
+              ]
+            : const [
+                BarcodeFormat.code128,
+                BarcodeFormat.pdf417,
+              ],
+      );
     
     // Start scanner setelah widget siap
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -291,20 +296,31 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                         Icon(
                           widget.scanType == ScanType.barcode
                               ? Icons.qr_code_scanner
-                              : Icons.qr_code,
+                              : Icons.qr_code_2,
                           color: Colors.white,
-                          size: 32,
+                          size: 40, // Lebih besar untuk mobile
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
                         Text(
                           widget.instruction,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 17, // Sedikit lebih besar untuk mobile
+                            fontWeight: FontWeight.w600,
                           ),
                           textAlign: TextAlign.center,
                         ),
+                        if (widget.scanType == ScanType.qrCode) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Pastikan QR code berada dalam kotak',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -312,16 +328,20 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
 
                 const Spacer(),
 
-                // Center scanning area - Lebih besar untuk barcode panjang
+                // Center scanning area - Square untuk QR code (mobile-friendly)
                 Container(
-                  width: MediaQuery.of(context).size.width * 0.9,
-                  height: widget.scanType == ScanType.qrCode ? 300 : 150, // Lebih tinggi untuk barcode panjang
+                  width: widget.scanType == ScanType.qrCode 
+                      ? MediaQuery.of(context).size.width * 0.75  // Square untuk QR code
+                      : MediaQuery.of(context).size.width * 0.9,
+                  height: widget.scanType == ScanType.qrCode 
+                      ? MediaQuery.of(context).size.width * 0.75  // Square untuk QR code
+                      : 150,
                   decoration: BoxDecoration(
                     border: Border.all(
                       color: Colors.white,
-                      width: 2,
+                      width: 3, // Lebih tebal untuk visibility
                     ),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16), // Lebih rounded untuk mobile
                   ),
                   child: Stack(
                     children: [
@@ -455,25 +475,43 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                         Text(
                           widget.scanType == ScanType.barcode
                               ? 'Arahkan kamera ke barcode produk'
-                              : 'Arahkan kamera ke QR code lokasi',
+                              : 'Arahkan kamera ke QR code',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
                           ),
                           textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Text(
                           widget.scanType == ScanType.barcode
                               ? 'Scanner akan mendeteksi barcode secara otomatis'
                               : 'Scanner akan mendeteksi QR code secara otomatis',
                           style: const TextStyle(
                             color: Colors.white70,
-                            fontSize: 12,
+                            fontSize: 13,
                           ),
                           textAlign: TextAlign.center,
                         ),
+                        if (widget.scanType == ScanType.qrCode) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.tips_and_updates, size: 16, color: Colors.white70),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Jaga jarak yang tepat untuk hasil terbaik',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

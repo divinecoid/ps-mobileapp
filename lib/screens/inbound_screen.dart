@@ -22,92 +22,26 @@ class _InboundScreenState extends State<InboundScreen> {
   }
 
   Future<void> _startScanBarcode() async {
-    // Show dialog untuk pilih scan atau manual input
-    final option = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Scan Barcode'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(Icons.qr_code_scanner),
-              title: Text('Scan dengan Kamera'),
-              onTap: () => Navigator.pop(context, 'scan'),
-            ),
-            ListTile(
-              leading: Icon(Icons.keyboard),
-              title: Text('Input Manual'),
-              onTap: () => Navigator.pop(context, 'manual'),
-            ),
-          ],
+    // Langsung buka QR scanner untuk mobile-friendly
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BarcodeScannerScreen(
+          title: 'Scan QR Code',
+          instruction: 'Arahkan kamera ke QR code barcode lusin atau satuan',
+          scanType: ScanType.qrCode, // Gunakan QR code untuk mobile-friendly
+          onScanResult: (barcode) {
+            // Callback dipanggil saat QR code terdeteksi
+          },
         ),
       ),
     );
 
-    if (option == 'scan') {
-      final result = await Navigator.push<String>(
-        context,
-        MaterialPageRoute(
-          builder: (context) => BarcodeScannerScreen(
-            title: 'Scan Barcode',
-            instruction: 'Arahkan kamera ke barcode lusin atau satuan',
-            scanType: ScanType.barcode,
-            onScanResult: (barcode) {
-              // Callback dipanggil saat barcode terdeteksi
-            },
-          ),
-        ),
-      );
-
-      if (result != null && mounted) {
-        _handleBarcodeScanned(result);
-      }
-    } else if (option == 'manual') {
-      _showManualInputDialog();
+    if (result != null && mounted) {
+      _handleBarcodeScanned(result);
     }
   }
 
-  void _showManualInputDialog() {
-    final controller = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Input Barcode Manual'),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            labelText: 'Masukkan barcode',
-            hintText: 'Contoh: LPK-MERAH-L-RAK01-001-PCS',
-            border: OutlineInputBorder(),
-          ),
-          autofocus: true,
-          onSubmitted: (value) {
-            if (value.isNotEmpty) {
-              Navigator.pop(context);
-              _handleBarcodeScanned(value);
-            }
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Batal'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (controller.text.isNotEmpty) {
-                Navigator.pop(context);
-                _handleBarcodeScanned(controller.text);
-              }
-            },
-            child: Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _addDummyBarcode() {
     // Generate dummy barcode untuk testing
@@ -397,7 +331,7 @@ class _InboundScreenState extends State<InboundScreen> {
             ),
           ),
 
-          // Scan Button & Add Dummy Button
+          // Scan QR Code Button & Add Dummy Button
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -405,26 +339,32 @@ class _InboundScreenState extends State<InboundScreen> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: _isLoading ? null : _startScanBarcode,
-                    icon: Icon(Icons.qr_code_scanner),
-                    label: Text('Scan Barcode'),
+                    icon: Icon(Icons.qr_code_scanner, size: 24),
+                    label: Text('Scan QR Code'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue.shade700,
                       foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(vertical: 16),
+                      padding: EdgeInsets.symmetric(vertical: 18),
                       textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
                 SizedBox(width: 12),
                 ElevatedButton.icon(
                   onPressed: _isLoading ? null : _addDummyBarcode,
-                  icon: Icon(Icons.add_circle_outline),
+                  icon: Icon(Icons.add_circle_outline, size: 20),
                   label: Text('Dummy'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green.shade600,
                     foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                    textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    padding: EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                    textStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ],
