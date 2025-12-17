@@ -27,20 +27,58 @@ class BarcodeScannerScreen extends StatefulWidget {
 class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   late MobileScannerController controller;
   bool isScanning = true;
+  bool _isInitialized = false;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    // Configure scanner based on scan type
-    controller = MobileScannerController(
-      detectionSpeed: DetectionSpeed.normal,
-      facing: CameraFacing.back,
-      torchEnabled: false,
-    );
+      // Konfigurasi khusus untuk QR code (mobile-friendly)
+      controller = MobileScannerController(
+        cameraResolution: const Size(1920, 1080), // High resolution untuk QR code yang jelas
+        detectionSpeed: DetectionSpeed.normal,
+        facing: CameraFacing.back,
+        torchEnabled: false,
+        autoStart: false,
+        formats: widget.scanType == ScanType.qrCode
+            ? const [
+                BarcodeFormat.qrCode, // Khusus QR code untuk mobile
+              ]
+            : const [
+                BarcodeFormat.code128,
+                BarcodeFormat.pdf417,
+              ],
+      );
+    
+    // Start scanner setelah widget siap
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startScanner();
+    });
+  }
+
+  Future<void> _startScanner() async {
+    try {
+      await controller.start();
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+          _errorMessage = null;
+        });
+      }
+    } catch (e) {
+      print('Error starting scanner: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Tidak dapat mengakses kamera. Pastikan izin kamera sudah diberikan.';
+          _isInitialized = false;
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
+    controller.stop();
     controller.dispose();
     super.dispose();
   }
@@ -50,10 +88,34 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
 
     final List<Barcode> barcodes = capture.barcodes;
     if (barcodes.isNotEmpty) {
-      final barcode = barcodes.first;
-      final String? code = barcode.rawValue;
+      // Coba semua barcode yang terdeteksi, ambil yang paling panjang/valid
+      Barcode? bestBarcode;
+      String? bestCode;
+      
+      for (final barcode in barcodes) {
+        final code = barcode.rawValue;
+        if (code != null && code.isNotEmpty) {
+          // Prioritaskan barcode yang lebih panjang (untuk barcode panjang)
+          if (bestCode == null || code.length > bestCode.length) {
+            bestBarcode = barcode;
+            bestCode = code;
+          }
+        }
+      }
 
-      if (code != null) {
+      if (bestCode != null && bestBarcode != null) {
+        // Debug: print barcode yang terdeteksi
+        print('Scanner detected barcode: $bestCode');
+        print('Barcode length: ${bestCode.length}');
+        print('Barcode type: ${bestBarcode.type}');
+        print('Barcode format: ${bestBarcode.format}');
+        
+        // Validasi minimal panjang untuk barcode kita (LPK-MERAH-L-RAK01-001-PCS = ~30 chars)
+        if (bestCode.length < 10) {
+          print('Barcode terlalu pendek, mungkin tidak valid. Panjang: ${bestCode.length}');
+          return; // Skip jika terlalu pendek
+        }
+        
         setState(() {
           isScanning = false;
         });
@@ -62,8 +124,10 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         // HapticFeedback.lightImpact();
 
         // Show result and return
-        widget.onScanResult(code);
-        Navigator.pop(context, code);
+        widget.onScanResult(bestCode);
+        Navigator.pop(context, bestCode);
+      } else {
+        print('Barcode detected but code is null or empty');
       }
     }
   }
@@ -92,26 +156,116 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           ),
         ),
         actions: [
+          // Auto-focus button untuk membantu scan barcode blur
+          IconButton(
+            icon: const Icon(Icons.center_focus_strong, color: Colors.white),
+            onPressed: () {
+              // Restart scanner untuk trigger auto-focus
+              controller.stop();
+              Future.delayed(const Duration(milliseconds: 100), () {
+                controller.start();
+              });
+            },
+            tooltip: 'Refresh Scanner',
+          ),
           IconButton(
             icon: const Icon(Icons.flash_off, color: Colors.white),
             onPressed: () => controller.toggleTorch(),
+            tooltip: 'Flash',
           ),
           IconButton(
             icon: const Icon(Icons.camera_rear, color: Colors.white),
             onPressed: () => controller.switchCamera(),
+            tooltip: 'Switch Camera',
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          // Scanner
-          MobileScanner(
-            controller: controller,
-            onDetect: _onDetect,
-          ),
+      body: _errorMessage != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 64,
+                      color: Colors.red.shade300,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Error',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _errorMessage!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _errorMessage = null;
+                        });
+                        _startScanner();
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Coba Lagi'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade700,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : Stack(
+              children: [
+                // Scanner
+                _isInitialized
+                    ? MobileScanner(
+                        controller: controller,
+                        onDetect: _onDetect,
+                      )
+                    : Container(
+                        color: Colors.black,
+                        child: const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircularProgressIndicator(
+                                color: Colors.white,
+                              ),
+                              SizedBox(height: 16),
+                              Text(
+                                'Memuat kamera...',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
 
-          // Overlay dengan instruksi
-          Container(
+                // Overlay dengan instruksi (hanya tampil jika sudah initialized)
+                if (_isInitialized)
+                  Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
@@ -142,20 +296,31 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                         Icon(
                           widget.scanType == ScanType.barcode
                               ? Icons.qr_code_scanner
-                              : Icons.qr_code,
+                              : Icons.qr_code_2,
                           color: Colors.white,
-                          size: 32,
+                          size: 40, // Lebih besar untuk mobile
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
                         Text(
                           widget.instruction,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 17, // Sedikit lebih besar untuk mobile
+                            fontWeight: FontWeight.w600,
                           ),
                           textAlign: TextAlign.center,
                         ),
+                        if (widget.scanType == ScanType.qrCode) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Pastikan QR code berada dalam kotak',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -163,16 +328,20 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
 
                 const Spacer(),
 
-                // Center scanning area
+                // Center scanning area - Square untuk QR code (mobile-friendly)
                 Container(
-                  width: 300,
-                  height: widget.scanType == ScanType.qrCode ? 300 : 100,
+                  width: widget.scanType == ScanType.qrCode 
+                      ? MediaQuery.of(context).size.width * 0.75  // Square untuk QR code
+                      : MediaQuery.of(context).size.width * 0.9,
+                  height: widget.scanType == ScanType.qrCode 
+                      ? MediaQuery.of(context).size.width * 0.75  // Square untuk QR code
+                      : 150,
                   decoration: BoxDecoration(
                     border: Border.all(
                       color: Colors.white,
-                      width: 2,
+                      width: 3, // Lebih tebal untuk visibility
                     ),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16), // Lebih rounded untuk mobile
                   ),
                   child: Stack(
                     children: [
@@ -306,25 +475,43 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                         Text(
                           widget.scanType == ScanType.barcode
                               ? 'Arahkan kamera ke barcode produk'
-                              : 'Arahkan kamera ke QR code lokasi',
+                              : 'Arahkan kamera ke QR code',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
                           ),
                           textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Text(
                           widget.scanType == ScanType.barcode
                               ? 'Scanner akan mendeteksi barcode secara otomatis'
                               : 'Scanner akan mendeteksi QR code secara otomatis',
                           style: const TextStyle(
                             color: Colors.white70,
-                            fontSize: 12,
+                            fontSize: 13,
                           ),
                           textAlign: TextAlign.center,
                         ),
+                        if (widget.scanType == ScanType.qrCode) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.tips_and_updates, size: 16, color: Colors.white70),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Jaga jarak yang tepat untuk hasil terbaik',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
