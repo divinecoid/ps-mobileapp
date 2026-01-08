@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../components/app_drawer.dart';
 import '../utils/navigation_helper.dart';
+import '../api/order_service.dart';
+import '../components/toast.dart';
 
 class OrderScreen extends StatefulWidget {
   const OrderScreen({super.key});
@@ -10,103 +12,71 @@ class OrderScreen extends StatefulWidget {
 }
 
 class _OrderScreenState extends State<OrderScreen> {
-  // Track assigned orders (using customer name as ID for now)
+  /// Track orders you assigned
   final Set<String> _assignedOrders = {};
-  
-  // Multi-select mode
+
   bool _isMultiSelectMode = false;
   final Set<String> _selectedOrders = {};
 
-  // Dummy data orders with items
-  final List<Map<String, dynamic>> _orders = [
-    {
-      'id': '1',
-      'customerName': 'Randy Khengdy',
-      'address': 'Jl. Kelapa Gading Raya No.1',
-      'totalItems': 3,
-      'deliveryType': 'GRAB - Instan',
-      'notes': 'Butuh cepat !',
-      'items': [
-        {'name': 'POLO BLACK XXL CUSTOM', 'qty': 1},
-        {'name': 'POLO WHITE XXL', 'qty': 2},
-      ],
-    },
-    {
-      'id': '2',
-      'customerName': 'William',
-      'address': 'Apt. Sudirman Mansion',
-      'totalItems': 7,
-      'deliveryType': 'SiCepat - Sameday Service',
-      'notes': 'Kirim Bang',
-      'items': [
-        {'name': 'T-Shirt Red M', 'qty': 3},
-        {'name': 'T-Shirt Blue L', 'qty': 4},
-      ],
-    },
-    {
-      'id': '3',
-      'customerName': 'Sarah Wijaya',
-      'address': 'Jl. Thamrin No. 15, Jakarta Pusat',
-      'totalItems': 5,
-      'deliveryType': 'JNE - REG',
-      'notes': 'Hati-hati barang mudah pecah',
-      'items': [
-        {'name': 'Kemeja Putih L', 'qty': 2},
-        {'name': 'Kemeja Biru M', 'qty': 2},
-        {'name': 'Kemeja Hitam XL', 'qty': 1},
-      ],
-    },
-    {
-      'id': '4',
-      'customerName': 'Budi Santoso',
-      'address': 'Jl. Gatot Subroto No. 88, Jakarta Selatan',
-      'totalItems': 4,
-      'deliveryType': 'GoSend - Same Day',
-      'notes': null,
-      'items': [
-        {'name': 'Jaket Hoodie Hitam XL', 'qty': 2},
-        {'name': 'Jaket Hoodie Abu-abu L', 'qty': 2},
-      ],
-    },
-    {
-      'id': '5',
-      'customerName': 'Lisa Permata',
-      'address': 'Komplek Permata Hijau Blok A No. 12',
-      'totalItems': 6,
-      'deliveryType': 'J&T Express - Ekspres',
-      'notes': 'Tolong dibungkus rapi',
-      'items': [
-        {'name': 'Dress Merah M', 'qty': 1},
-        {'name': 'Dress Biru S', 'qty': 2},
-        {'name': 'Dress Putih L', 'qty': 3},
-      ],
-    },
-    {
-      'id': '6',
-      'customerName': 'Ahmad Fauzi',
-      'address': 'Jl. Sudirman Kav. 52-53, Jakarta',
-      'totalItems': 8,
-      'deliveryType': 'Pos Indonesia - Kilat Khusus',
-      'notes': 'Urgent!',
-      'items': [
-        {'name': 'Celana Jeans Hitam 32', 'qty': 3},
-        {'name': 'Celana Jeans Biru 34', 'qty': 2},
-        {'name': 'Celana Chino Coklat 33', 'qty': 3},
-      ],
-    },
-    {
-      'id': '7',
-      'customerName': 'Dewi Sari',
-      'address': 'Jl. Kemang Raya No. 45, Jakarta Selatan',
-      'totalItems': 3,
-      'deliveryType': 'GRAB - Instan',
-      'notes': 'Tolong diantar sebelum jam 5 sore',
-      'items': [
-        {'name': 'Blouse Putih M', 'qty': 1},
-        {'name': 'Blouse Pink L', 'qty': 2},
-      ],
-    },
-  ];
+  List<Map<String, dynamic>> _orders = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchOrders();
+  }
+
+  Future<void> _fetchOrders() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final orders = await OrderService.getOrders();
+
+      // MAPPING SESUAI BACKEND
+      final mappedOrders = orders.map((o) {
+        return {
+          'id': o['id'].toString(),
+          'awbCode': o['awb_code'],
+          'readAt': o['read_at'],
+          'preparedAt': o['prepared_at'],
+          'prepareDuration': o['prepare_duration'],
+          'readToShipAt': o['readtoship_at'],
+          'readToShipMarketplace': o['readtoship_marketplace'],
+          'onlineStoreId': o['online_store_id'],
+          'itemCount': o['item_count'],
+          'uniqueItemCount': o['unique_item_count'],
+          'status': o['status'],
+          'totalWeight': o['total_weight'],
+          'totalPrice': o['total_price'],
+          'totalShipping': o['total_shipping'],
+          'totalAmount': o['total_amount'],
+          'preparistUserId': o['preparist_user_id'],
+          'customerName': o['customer_name'],
+          'customerPhone': o['customer_phone'],
+          'customerAddress': o['customer_address'],
+        };
+      }).toList();
+
+      print("Mapped: $mappedOrders");
+
+      setState(() {
+        _orders = mappedOrders;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print("Fetch Error: $e");
+      setState(() {
+        _errorMessage = "Gagal memuat order: $e";
+        _isLoading = false;
+      });
+      Toast.show(context, _errorMessage!);
+    }
+  }
 
   void _handleMenuSelection(String menu) {
     NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'order');
@@ -123,76 +93,59 @@ class _OrderScreenState extends State<OrderScreen> {
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
-        title: Text(
-          'PREPARIST APP',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: Text("PREPARIST APP",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
           if (_isMultiSelectMode)
             IconButton(
+              onPressed: _selectedOrders.isNotEmpty
+                  ? _assignMultipleOrders
+                  : null,
               icon: Icon(Icons.person_add, color: Colors.white),
-              onPressed: _selectedOrders.isEmpty
-                  ? null
-                  : () {
-                      _assignMultipleOrders();
-                    },
-              tooltip: 'Assign to me',
             ),
           if (_isMultiSelectMode)
             IconButton(
-              icon: Icon(Icons.close, color: Colors.white),
               onPressed: () {
                 setState(() {
                   _isMultiSelectMode = false;
                   _selectedOrders.clear();
                 });
               },
-              tooltip: 'Cancel selection',
+              icon: Icon(Icons.close, color: Colors.white),
             ),
         ],
       ),
-      drawer: AppDrawer(
-        onMenuSelected: (menu) => _handleMenuSelection(menu),
-      ),
+      drawer: AppDrawer(onMenuSelected: _handleMenuSelection),
       body: Column(
         children: [
-          // Filter Button
-          Container(
-            padding: EdgeInsets.all(16),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  // TODO: Implement filter functionality
-                },
-                icon: Icon(Icons.filter_list, color: Colors.white),
-                label: Text(
-                  'Filter',
-                  style: TextStyle(color: Colors.white),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue.shade700,
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                ),
-              ),
+          _buildTopButtons(),
+          Expanded(child: _buildContent()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopButtons() {
+    return Padding(
+      padding: EdgeInsets.all(16),
+      child: Row(
+        children: [
+          ElevatedButton.icon(
+            onPressed: () {},
+            icon: Icon(Icons.filter_list, color: Colors.white),
+            label: Text("Filter", style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue.shade700,
             ),
           ),
-
-          // Orders List
-          Expanded(
-            child: ListView.builder(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _orders.length,
-              itemBuilder: (context, index) {
-                final order = _orders[index];
-                final isAssigned = _assignedOrders.contains(order['id']);
-                final isSelected = _selectedOrders.contains(order['id']);
-                return _buildOrderCard(order, isAssigned, isSelected);
-              },
+          SizedBox(width: 12),
+          ElevatedButton.icon(
+            onPressed: _isLoading ? null : _fetchOrders,
+            icon: Icon(Icons.refresh, color: Colors.white),
+            label: Text("Refresh", style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade600,
             ),
           ),
         ],
@@ -200,7 +153,65 @@ class _OrderScreenState extends State<OrderScreen> {
     );
   }
 
-  Widget _buildOrderCard(Map<String, dynamic> order, bool isAssigned, bool isSelected) {
+  Widget _buildContent() {
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 12),
+            Text("Memuat order..."),
+          ],
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 50, color: Colors.red),
+            SizedBox(height: 12),
+            Text(_errorMessage!, textAlign: TextAlign.center),
+            SizedBox(height: 12),
+            ElevatedButton(onPressed: _fetchOrders, child: Text("Coba Lagi")),
+          ],
+        ),
+      );
+    }
+
+    if (_orders.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.inbox, size: 50, color: Colors.grey),
+            SizedBox(height: 12),
+            Text("Tidak ada order"),
+            ElevatedButton(onPressed: _fetchOrders, child: Text("Refresh")),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _fetchOrders,
+      child: ListView.builder(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _orders.length,
+        itemBuilder: (context, i) =>
+            _buildOrderCard(_orders[i]),
+      ),
+    );
+  }
+
+  Widget _buildOrderCard(Map<String, dynamic> order) {
+    final id = order['id'];
+    final isAssigned = _assignedOrders.contains(id);
+    final isSelected = _selectedOrders.contains(id);
+
     return Container(
       margin: EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -213,22 +224,19 @@ class _OrderScreenState extends State<OrderScreen> {
                 : null,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.1),
-            spreadRadius: 1,
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
+            offset: Offset(0, 3),
+          )
         ],
       ),
       child: InkWell(
         onTap: () {
           if (_isMultiSelectMode) {
             setState(() {
-              if (isSelected) {
-                _selectedOrders.remove(order['id']);
-              } else {
-                _selectedOrders.add(order['id']);
-              }
+              isSelected
+                  ? _selectedOrders.remove(id)
+                  : _selectedOrders.add(id);
             });
           } else {
             _showOrderDetail(order);
@@ -237,7 +245,7 @@ class _OrderScreenState extends State<OrderScreen> {
         onLongPress: () {
           setState(() {
             _isMultiSelectMode = true;
-            _selectedOrders.add(order['id']);
+            _selectedOrders.add(id);
           });
         },
         borderRadius: BorderRadius.circular(12),
@@ -246,155 +254,40 @@ class _OrderScreenState extends State<OrderScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Customer Name with Assigned Badge and Checkbox
+              // Name
               Row(
                 children: [
                   if (_isMultiSelectMode)
                     Padding(
                       padding: EdgeInsets.only(right: 12),
-                      child: Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: isSelected ? Colors.blue.shade700 : Colors.transparent,
-                          border: Border.all(
-                            color: isSelected ? Colors.blue.shade700 : Colors.grey[400]!,
-                            width: 2,
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: isSelected
-                            ? Icon(
-                                Icons.check,
-                                color: Colors.white,
-                                size: 18,
-                              )
-                            : null,
+                      child: Icon(
+                        isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                        color: isSelected ? Colors.blue.shade700 : Colors.grey,
                       ),
                     ),
                   Expanded(
                     child: Text(
-                      order['customerName'],
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[900],
-                      ),
+                      order['customerName'] ?? '-',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
-                  if (isAssigned && !_isMultiSelectMode)
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade700,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'ASSIGNED',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
+                  if (isAssigned)
+                    _badge("ASSIGNED", Colors.blue.shade700),
                 ],
               ),
               SizedBox(height: 12),
 
-              // Address
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.location_on,
-                    size: 18,
-                    color: Colors.grey[600],
-                  ),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      order['address'],
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 12),
+              _iconText(Icons.location_on, order['customerAddress']),
+              SizedBox(height: 8),
 
-              // Total Items
-              Row(
-                children: [
-                  Icon(
-                    Icons.shopping_bag,
-                    size: 18,
-                    color: Colors.grey[600],
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Total Items: ${order['totalItems']}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 12),
+              _iconText(Icons.receipt, "AWB: ${order['awbCode']}"),
+              SizedBox(height: 8),
 
-              // Delivery Type
-              Row(
-                children: [
-                  Icon(
-                    Icons.local_shipping,
-                    size: 18,
-                    color: Colors.grey[600],
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    order['deliveryType'],
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 12),
+              _iconText(Icons.shopping_bag,
+                  "Items: ${order['itemCount']} (${order['uniqueItemCount']} unik)"),
+              SizedBox(height: 8),
 
-              // Notes
-              if (order['notes'] != null && order['notes'].toString().isNotEmpty)
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.note,
-                        size: 18,
-                        color: Colors.orange.shade700,
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          order['notes'],
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.orange.shade900,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              _iconText(Icons.info, "Status: ${order['status']}"),
             ],
           ),
         ),
@@ -402,232 +295,151 @@ class _OrderScreenState extends State<OrderScreen> {
     );
   }
 
+  Widget _iconText(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: Colors.grey[600]),
+        SizedBox(width: 8),
+        Expanded(child: Text(text, style: TextStyle(color: Colors.grey[700]))),
+      ],
+    );
+  }
+
+  Widget _badge(String text, Color color) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration:
+          BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+      child: Text(text,
+          style: TextStyle(color: Colors.white, fontSize: 10)),
+    );
+  }
+
   void _showOrderDetail(Map<String, dynamic> order) {
-    final isAssigned = _assignedOrders.contains(order['id']);
-    
+    final id = order['id'];
+    final isAssigned = _assignedOrders.contains(id);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.9,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            // Handle bar
-            Container(
-              margin: EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
+      builder: (context) => _buildDetailSheet(order, isAssigned),
+    );
+  }
+
+  Widget _buildDetailSheet(Map<String, dynamic> order, bool isAssigned) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.9,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            margin: EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
             ),
-            
-            // Header
-            Padding(
-              padding: EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Detail Order',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[900],
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            
-            Divider(),
-            
-            // Content
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Order Summary Card
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            order['customerName'],
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey[900],
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Icon(Icons.local_shipping, size: 18, color: Colors.grey[600]),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  order['deliveryType'],
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[700],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (order['notes'] != null && order['notes'].toString().isNotEmpty) ...[
-                            SizedBox(height: 8),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(Icons.note, size: 18, color: Colors.orange.shade700),
-                                SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    order['notes'],
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.orange.shade900,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    
-                    SizedBox(height: 16),
-                    
-                    // Items List Card
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey[300]!),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Items',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey[900],
-                            ),
-                          ),
-                          SizedBox(height: 12),
-                          ...(order['items'] as List).map<Widget>((item) {
-                            return Padding(
-                              padding: EdgeInsets.only(bottom: 8),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      '${item['qty']} pc ${item['name']}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey[700],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        ],
-                      ),
-                    ),
-                  ],
+          ),
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text("Detail Order",
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(Icons.close),
+                )
+              ],
+            ),
+          ),
+          Divider(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _detailCard(order),
+                  SizedBox(height: 20),
+                ],
               ),
             ),
-            
-            // Action Buttons
-            Container(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 32),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Colors.grey[200]!)),
+          ),
+          _actionButtons(order['id'], isAssigned),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailCard(Map<String, dynamic> o) {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(o['customerName'],
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          SizedBox(height: 8),
+          _iconText(Icons.location_on, o['customerAddress']),
+          SizedBox(height: 8),
+          _iconText(Icons.phone, o['customerPhone']),
+          SizedBox(height: 8),
+          _iconText(Icons.receipt, "AWB: ${o['awbCode']}"),
+          SizedBox(height: 8),
+          _iconText(Icons.shopping_bag,
+              "Items: ${o['itemCount']} (${o['uniqueItemCount']} unik)"),
+          SizedBox(height: 8),
+          _iconText(Icons.info, "Status: ${o['status']}"),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionButtons(String id, bool isAssigned) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey[200]!)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {},
+                child: Text("PRINT"),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[300]),
               ),
-              child: SafeArea(
-                top: false,
-                child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // TODO: Implement print functionality
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey[300],
-                        padding: EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        'PRINT',
-                        style: TextStyle(
-                          color: Colors.grey[900],
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (isAssigned) {
-                          _unassignOrder(order['id']);
-                        } else {
-                          _assignOrder(order['id']);
-                        }
-                        Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isAssigned ? Colors.orange.shade700 : Colors.blue.shade700,
-                        padding: EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        isAssigned ? 'LEMPAR ORDERAN' : 'AMBIL ORDERAN',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {
+                  isAssigned ? _unassignOrder(id) : _assignOrder(id);
+                  Navigator.pop(context);
+                },
+                child: Text(
+                  isAssigned ? "LEMPAR ORDERAN" : "AMBIL ORDERAN",
+                  style: TextStyle(color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      isAssigned ? Colors.orange.shade700 : Colors.blue.shade700,
                 ),
               ),
             ),
@@ -637,47 +449,33 @@ class _OrderScreenState extends State<OrderScreen> {
     );
   }
 
-  void _assignOrder(String orderId) {
-    setState(() {
-      _assignedOrders.add(orderId);
-    });
+  // ASSIGN LOGIC
+  void _assignOrder(String id) {
+    setState(() => _assignedOrders.add(id));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Order berhasil di-assign ke Anda'),
-        backgroundColor: Colors.green,
-      ),
+      SnackBar(content: Text("Order di-assign"), backgroundColor: Colors.green),
     );
   }
 
-  void _unassignOrder(String orderId) {
-    setState(() {
-      _assignedOrders.remove(orderId);
-    });
+  void _unassignOrder(String id) {
+    setState(() => _assignedOrders.remove(id));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Order berhasil di-unassign'),
-        backgroundColor: Colors.orange,
-      ),
+      SnackBar(content: Text("Order dilepas"), backgroundColor: Colors.orange),
     );
   }
 
   void _assignMultipleOrders() {
-    if (_selectedOrders.isEmpty) return;
-
     final count = _selectedOrders.length;
-    
     setState(() {
       _assignedOrders.addAll(_selectedOrders);
       _selectedOrders.clear();
       _isMultiSelectMode = false;
     });
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$count order berhasil di-assign ke Anda'),
+        content: Text("$count order berhasil di-assign"),
         backgroundColor: Colors.green,
       ),
     );
   }
 }
-
