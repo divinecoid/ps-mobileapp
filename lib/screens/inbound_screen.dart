@@ -6,6 +6,7 @@ import '../models/barcode_product.dart' as bp;
 import '../components/toast.dart';
 import '../utils/beep_service.dart';
 import '../api/inbound_service.dart';
+import '../api/warehouse_service.dart';
 
 class InboundScreen extends StatefulWidget {
   const InboundScreen({super.key});
@@ -22,21 +23,43 @@ class _InboundScreenState extends State<InboundScreen> {
   List<bp.BarcodeProduct> _scannedBarcodes = [];
   bool _isListExpanded = true;
   bool _isSubmitting = false;
+  bool _isLoadingWarehouses = true;
   String? _selectedWarehouseId;
   final TextEditingController _notesController = TextEditingController();
   
-  // TODO: Replace with real warehouse data from API
-  final List<Map<String, String>> _warehouses = [
-    {'id': '9d7e1234-5678-90ab-cdef-1234567890ab', 'name': 'Warehouse Main'},
-    {'id': '9d7e1234-5678-90ab-cdef-1234567890ac', 'name': 'Warehouse Secondary'},
-  ];
+  // Warehouse data from API
+  List<Warehouse> _warehouses = [];
 
   @override
   void initState() {
     super.initState();
-    // Set default warehouse
-    if (_warehouses.isNotEmpty) {
-      _selectedWarehouseId = _warehouses[0]['id'];
+    _loadWarehouses();
+  }
+
+  Future<void> _loadWarehouses() async {
+    setState(() {
+      _isLoadingWarehouses = true;
+    });
+    
+    try {
+      final warehouses = await WarehouseService.getWarehouses();
+      if (mounted) {
+        setState(() {
+          _warehouses = warehouses;
+          _isLoadingWarehouses = false;
+          // Set default warehouse to first one
+          if (_warehouses.isNotEmpty && _selectedWarehouseId == null) {
+            _selectedWarehouseId = _warehouses[0].id;
+          }
+        });
+      }
+    } catch (e) {
+      print('Error loading warehouses: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingWarehouses = false;
+        });
+      }
     }
   }
 
@@ -48,7 +71,79 @@ class _InboundScreenState extends State<InboundScreen> {
   }
 
   void _handleMenuSelection(BuildContext context, String menu) {
-    NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'inbound');
+    if (_scannedBarcodes.isNotEmpty) {
+      _showExitConfirmation(
+        context,
+        () => NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'inbound'),
+      );
+    } else {
+      NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'inbound');
+    }
+  }
+
+  Future<bool> _onWillPop() async {
+    if (_scannedBarcodes.isEmpty) {
+      return true;
+    }
+    
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+            SizedBox(width: 12),
+            Text('Peringatan'),
+          ],
+        ),
+        content: Text(
+          'Anda memiliki ${_scannedBarcodes.length} barcode yang belum di-submit.\n\nJika Anda keluar sekarang, semua data scan akan hilang.\n\nApakah Anda yakin ingin keluar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Keluar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    
+    return result ?? false;
+  }
+
+  void _showExitConfirmation(BuildContext context, VoidCallback onConfirm) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+            SizedBox(width: 12),
+            Text('Peringatan'),
+          ],
+        ),
+        content: Text(
+          'Anda memiliki ${_scannedBarcodes.length} barcode yang belum di-submit.\n\nJika Anda pindah menu, semua data scan akan hilang.\n\nApakah Anda yakin?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              onConfirm();
+            },
+            child: Text('Pindah', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _onDetect(BarcodeCapture capture) {
@@ -331,7 +426,16 @@ class _InboundScreenState extends State<InboundScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: _scannedBarcodes.isEmpty,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _onWillPop();
+        if (shouldPop && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.blue.shade700,
         leading: Builder(
@@ -552,30 +656,45 @@ class _InboundScreenState extends State<InboundScreen> {
                           ),
                         ),
                         SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          value: _selectedWarehouseId,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 12,
-                            ),
-                            isDense: true,
-                          ),
-                          items: _warehouses.map((warehouse) {
-                            return DropdownMenuItem<String>(
-                              value: warehouse['id'],
-                              child: Text(warehouse['name']!),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedWarehouseId = value;
-                            });
-                          },
-                        ),
+                        _isLoadingWarehouses
+                            ? Container(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text('Memuat warehouse...'),
+                                  ],
+                                ),
+                              )
+                            : DropdownButtonFormField<String>(
+                                value: _selectedWarehouseId,
+                                decoration: InputDecoration(
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                  isDense: true,
+                                ),
+                                items: _warehouses.map((warehouse) {
+                                  return DropdownMenuItem<String>(
+                                    value: warehouse.id,
+                                    child: Text(warehouse.displayName),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {
+                                  setState(() {
+                                    _selectedWarehouseId = value;
+                                  });
+                                },
+                              ),
                         
                         SizedBox(height: 16),
                         
@@ -622,6 +741,7 @@ class _InboundScreenState extends State<InboundScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 
