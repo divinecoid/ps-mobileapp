@@ -56,16 +56,27 @@ class AuthService {
     final refreshToken = await AppStorage.getRefreshToken();
     try {
       if (refreshToken != null) {
-        await ApiClient.dio.post(
+        final response = await ApiClient.dio.post(
           '/auth/logout',
           data: {'refresh_token': refreshToken},
         );
+        
+        // Check if API returned success: false (e.g., invalid refresh token)
+        if (response.data['success'] == false) {
+          print('⚠️ Logout failed: ${response.data['message']}');
+          // Still clear local tokens even if server rejects
+          await AppStorage.clear();
+          return false;
+        }
       }
 
       // Remove tokens locally
       await AppStorage.clear();
       return true;
     } catch (e) {
+      print('❌ Logout error: $e');
+      // Clear tokens anyway to force logout locally
+      await AppStorage.clear();
       return false;
     }
   }
