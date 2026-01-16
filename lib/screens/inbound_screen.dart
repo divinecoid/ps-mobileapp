@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../components/app_drawer.dart';
 import '../utils/navigation_helper.dart';
-import '../models/barcode_product.dart';
-import 'barcode_scanner_screen.dart';
+import '../models/barcode_product.dart' as bp;
 import '../components/toast.dart';
-import 'inbound_summary_screen.dart';
 import '../utils/beep_service.dart';
+import '../api/inbound_service.dart';
 
 class InboundScreen extends StatefulWidget {
   const InboundScreen({super.key});
@@ -15,36 +15,54 @@ class InboundScreen extends StatefulWidget {
 }
 
 class _InboundScreenState extends State<InboundScreen> {
-  List<BarcodeProduct> _scannedBarcodes = [];
-  bool _isLoading = false;
+  final MobileScannerController _scannerController = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+  );
+  
+  List<bp.BarcodeProduct> _scannedBarcodes = [];
+  bool _isListExpanded = true;
+  bool _isSubmitting = false;
+  String? _selectedWarehouseId;
+  final TextEditingController _notesController = TextEditingController();
+  
+  // TODO: Replace with real warehouse data from API
+  final List<Map<String, String>> _warehouses = [
+    {'id': '9d7e1234-5678-90ab-cdef-1234567890ab', 'name': 'Warehouse Main'},
+    {'id': '9d7e1234-5678-90ab-cdef-1234567890ac', 'name': 'Warehouse Secondary'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Set default warehouse
+    if (_warehouses.isNotEmpty) {
+      _selectedWarehouseId = _warehouses[0]['id'];
+    }
+  }
+
+  @override
+  void dispose() {
+    _scannerController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
 
   void _handleMenuSelection(BuildContext context, String menu) {
     NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'inbound');
   }
 
-  Future<void> _startScanBarcode() async {
-    // Langsung buka QR scanner untuk mobile-friendly
-    final result = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => BarcodeScannerScreen(
-          title: 'Scan QR Code',
-          instruction: 'Arahkan kamera ke QR code barcode lusin atau satuan',
-          scanType: ScanType.qrCode, // Gunakan QR code untuk mobile-friendly
-          onScanResult: (barcode) {
-            // Callback dipanggil saat QR code terdeteksi
-          },
-        ),
-      ),
-    );
-
-    if (result != null && mounted) {
-      _handleBarcodeScanned(result);
+  void _onDetect(BarcodeCapture capture) {
+    final List<Barcode> barcodes = capture.barcodes;
+    
+    for (final barcode in barcodes) {
+      final String? code = barcode.rawValue;
+      if (code != null && code.isNotEmpty) {
+        _handleBarcodeScanned(code);
+        // Only process first barcode to avoid duplicates
+        break;
+      }
     }
   }
-
-
-
 
   void _handleBarcodeScanned(String barcode) {
     // Parse barcode dari format API:
@@ -61,7 +79,7 @@ class _InboundScreenState extends State<InboundScreen> {
       if (_scannedBarcodes.any((b) => b.barcode == cleanedBarcode)) {
         // Play error beep untuk barcode yang sudah discan
         BeepService.playErrorBeep();
-        Toast.show(context, 'Barcode sudah pernah di-scan');
+        Toast.show(context, '⚠️ Barcode sudah pernah di-scan');
         return;
       }
 
@@ -73,7 +91,7 @@ class _InboundScreenState extends State<InboundScreen> {
       if (parts.length != 7) {
         // Play error beep untuk format tidak valid
         BeepService.playErrorBeep();
-        Toast.show(context, 'Format barcode tidak valid. Expected 7 parts, got ${parts.length}');
+        Toast.show(context, '❌ Format barcode tidak valid');
         return;
       }
 
@@ -88,16 +106,16 @@ class _InboundScreenState extends State<InboundScreen> {
       print('Parsed: cmt=$cmtCode, date=$requestDate, model=$modelSku, color=$colorCode, size=$sizeCode, type=$typeStr, seq=$sequence');
 
       final type = typeStr.toUpperCase() == 'DOZEN' 
-          ? BarcodeType.lusin 
-          : BarcodeType.satuan;
+          ? bp.BarcodeType.lusin 
+          : bp.BarcodeType.satuan;
       
-      final qty = type == BarcodeType.lusin ? 12 : 1;
+      final qty = type == bp.BarcodeType.lusin ? 12 : 1;
 
       // Untuk demo, gunakan nama yang lebih readable
       final modelName = _getModelName(modelSku);
       final colorName = _getColorName(colorCode);
 
-      final barcodeProduct = BarcodeProduct(
+      final barcodeProduct = bp.BarcodeProduct(
         barcode: cleanedBarcode, // Simpan barcode original
         type: type,
         model: modelName,
@@ -114,12 +132,12 @@ class _InboundScreenState extends State<InboundScreen> {
 
       // Play success beep untuk barcode berhasil discan
       BeepService.playSuccessBeep();
-      Toast.show(context, 'Barcode berhasil di-scan: ${barcodeProduct.typeLabel}');
+      Toast.show(context, '✅ ${barcodeProduct.typeLabel} terscan');
     } catch (e) {
       print('Error parsing barcode: $e');
       // Play error beep untuk error
       BeepService.playErrorBeep();
-      Toast.show(context, 'Error parsing barcode: $e');
+      Toast.show(context, '❌ Error parsing barcode');
     }
   }
 
@@ -150,7 +168,7 @@ class _InboundScreenState extends State<InboundScreen> {
     return colorMap[code.toUpperCase()] ?? code;
   }
 
-  void _removeBarcode(BarcodeProduct barcode) {
+  void _removeBarcode(bp.BarcodeProduct barcode) {
     setState(() {
       _scannedBarcodes.remove(barcode);
     });
@@ -162,7 +180,7 @@ class _InboundScreenState extends State<InboundScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Hapus Semua'),
-        content: Text('Apakah Anda yakin ingin menghapus semua barcode yang sudah di-scan?'),
+        content: Text('Apakah Anda yakin ingin menghapus semua barcode?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -183,18 +201,118 @@ class _InboundScreenState extends State<InboundScreen> {
     );
   }
 
-  void _navigateToSummary() {
+  Future<void> _submitInbound() async {
     if (_scannedBarcodes.isEmpty) {
       Toast.show(context, 'Belum ada barcode yang di-scan');
       return;
     }
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => InboundSummaryScreen(
-          scannedBarcodes: _scannedBarcodes,
+    if (_selectedWarehouseId == null) {
+      Toast.show(context, 'Pilih warehouse terlebih dahulu');
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      // Extract raw barcodes
+      final barcodes = _scannedBarcodes.map((b) => b.barcode).toList();
+
+      // Call API
+      final result = await InboundService.submitInbound(
+        barcodes: barcodes,
+        warehouseId: _selectedWarehouseId!,
+        notes: _notesController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        _showSuccessDialog(result['data'], result['errors']);
+      } else {
+        _showErrorDialog(result['message'], result['errors']);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Toast.show(context, 'Error: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  void _showSuccessDialog(Map<String, dynamic>? data, List<dynamic>? errors) {
+    final summary = data?['summary'];
+    final hasErrors = errors != null && errors.isNotEmpty;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              hasErrors ? Icons.warning : Icons.check_circle,
+              color: hasErrors ? Colors.orange : Colors.green,
+              size: 28,
+            ),
+            SizedBox(width: 12),
+            Text(hasErrors ? 'Berhasil (dengan error)' : 'Berhasil!'),
+          ],
         ),
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (summary != null) ...[
+              Text('Total Scanned: ${summary['total_scanned']}'),
+              Text('Processed: ${summary['total_processed']}'),
+              if (summary['total_failed'] > 0)
+                Text('Failed: ${summary['total_failed']}',
+                    style: TextStyle(color: Colors.red)),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              // Clear scanned items
+              setState(() {
+                _scannedBarcodes.clear();
+                _notesController.clear();
+              });
+            },
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showErrorDialog(String message, dynamic errors) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.error, color: Colors.red, size: 28),
+            SizedBox(width: 12),
+            Text('Error'),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
       ),
     );
   }
@@ -204,11 +322,11 @@ class _InboundScreenState extends State<InboundScreen> {
   }
 
   int get _totalLusin {
-    return _scannedBarcodes.where((b) => b.type == BarcodeType.lusin).length;
+    return _scannedBarcodes.where((b) => b.type == bp.BarcodeType.lusin).length;
   }
 
   int get _totalSatuan {
-    return _scannedBarcodes.where((b) => b.type == BarcodeType.satuan).length;
+    return _scannedBarcodes.where((b) => b.type == bp.BarcodeType.satuan).length;
   }
 
   @override
@@ -233,9 +351,9 @@ class _InboundScreenState extends State<InboundScreen> {
         actions: [
           if (_scannedBarcodes.isNotEmpty)
             IconButton(
-              icon: Icon(Icons.summarize, color: Colors.white),
-              onPressed: _navigateToSummary,
-              tooltip: 'Summary',
+              icon: Icon(Icons.delete_sweep, color: Colors.white),
+              onPressed: _clearAllBarcodes,
+              tooltip: 'Hapus Semua',
             ),
         ],
       ),
@@ -244,420 +362,262 @@ class _InboundScreenState extends State<InboundScreen> {
       ),
       body: Column(
         children: [
-          // Summary Card
-          Container(
-            width: double.infinity,
-            margin: EdgeInsets.all(16),
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.blue.shade200),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // Scanner Section with Floating Summary
+          Expanded(
+            flex: 2,
+            child: Stack(
               children: [
-                Text(
-                  'Summary',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade900,
+                // QR Scanner
+                MobileScanner(
+                  controller: _scannerController,
+                  onDetect: _onDetect,
+                ),
+                
+                // Scanner Overlay
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 250,
+                      height: 250,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.white, width: 3),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
                 ),
-                SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildSummaryItem(
-                        'Total Barcode',
-                        '${_scannedBarcodes.length}',
-                        Icons.qr_code_scanner,
-                        Colors.blue,
+                
+                // Instruction Text
+                Positioned(
+                  top: 20,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    color: Colors.black.withOpacity(0.6),
+                    child: Text(
+                      'Arahkan kamera ke QR Code',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: _buildSummaryItem(
-                        'Total Item',
-                        '$_totalItems',
-                        Icons.inventory_2,
-                        Colors.green,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-                SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildSummaryItem(
-                        'Lusin',
-                        '$_totalLusin',
-                        Icons.layers,
-                        Colors.orange,
-                      ),
+                
+                // Floating Summary Card
+                Positioned(
+                  bottom: 16,
+                  left: 16,
+                  right: 16,
+                  child: Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.95),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: _buildSummaryItem(
-                        'Satuan',
-                        '$_totalSatuan',
-                        Icons.style,
-                        Colors.purple,
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildSummaryChip(
+                          'Total',
+                          '${_scannedBarcodes.length}',
+                          Icons.qr_code_scanner,
+                          Colors.blue,
+                        ),
+                        _buildSummaryChip(
+                          'Items',
+                          '$_totalItems',
+                          Icons.inventory_2,
+                          Colors.green,
+                        ),
+                        _buildSummaryChip(
+                          'Lusin',
+                          '$_totalLusin',
+                          Icons.layers,
+                          Colors.orange,
+                        ),
+                        _buildSummaryChip(
+                          'Satuan',
+                          '$_totalSatuan',
+                          Icons.style,
+                          Colors.purple,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),
           ),
-
-          // Scan QR Code Button
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-              onPressed: _isLoading ? null : _startScanBarcode,
-              icon: Icon(Icons.qr_code_scanner, size: 24),
-              label: Text('Scan QR Code'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue.shade700,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(vertical: 18),
-                textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                ),
-              ),
-            ),
-          ),
-
-          SizedBox(height: 16),
-
-          // List Scanned Barcodes
+          
+          // Scanned Items List Section
           Expanded(
-            child: _scannedBarcodes.isEmpty
-                ? Center(
+            flex: 3,
+            child: Container(
+              color: Colors.grey.shade100,
+              child: Column(
+                children: [
+                  // List Header
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _isListExpanded = !_isListExpanded;
+                      });
+                    },
+                    child: Container(
+                      padding: EdgeInsets.all(16),
+                      color: Colors.white,
+                      child: Row(
+                        children: [
+                          Icon(
+                            _isListExpanded
+                                ? Icons.expand_more
+                                : Icons.chevron_right,
+                            color: Colors.blue.shade700,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Barcode Ter-scan (${_scannedBarcodes.length})',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  // Scanned Items List
+                  if (_isListExpanded)
+                    Expanded(
+                      child: _scannedBarcodes.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.qr_code_scanner_outlined,
+                                    size: 60,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    'Scan QR code untuk mulai',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: EdgeInsets.all(8),
+                              itemCount: _scannedBarcodes.length,
+                              itemBuilder: (context, index) {
+                                final barcode = _scannedBarcodes[index];
+                                return _buildBarcodeCard(barcode);
+                              },
+                            ),
+                    ),
+                  
+                  // Form Section
+                  Container(
+                    color: Colors.white,
+                    padding: EdgeInsets.all(16),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.qr_code_scanner_outlined,
-                          size: 80,
-                          color: Colors.grey.shade300,
-                        ),
-                        SizedBox(height: 16),
+                        // Warehouse Dropdown
                         Text(
-                          'Belum ada barcode yang di-scan',
+                          'Warehouse',
                           style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
                           ),
                         ),
                         SizedBox(height: 8),
-                        Text(
-                          'Tekan tombol "Scan Barcode" untuk mulai',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade500,
+                        DropdownButtonFormField<String>(
+                          value: _selectedWarehouseId,
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            isDense: true,
                           ),
+                          items: _warehouses.map((warehouse) {
+                            return DropdownMenuItem<String>(
+                              value: warehouse['id'],
+                              child: Text(warehouse['name']!),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedWarehouseId = value;
+                            });
+                          },
                         ),
-                      ],
-                    ),
-                  )
-                : Column(
-                    children: [
-                      // Header dengan clear button
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Barcode Ter-scan (${_scannedBarcodes.length})',
-                              style: TextStyle(
+                        
+                        SizedBox(height: 16),
+                        
+                        // Submit Button
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _isSubmitting ? null : _submitInbound,
+                            icon: _isSubmitting
+                                ? SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.white),
+                                    ),
+                                  )
+                                : Icon(Icons.send, size: 20),
+                            label: Text(_isSubmitting ? 'Memproses...' : 'Submit Inbound'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green.shade600,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              textStyle: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
-                            ),
-                            TextButton.icon(
-                              onPressed: _clearAllBarcodes,
-                              icon: Icon(Icons.delete_outline, size: 18),
-                              label: Text('Hapus Semua'),
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.red,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: ListView.builder(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: _scannedBarcodes.length,
-                          itemBuilder: (context, index) {
-                            final barcode = _scannedBarcodes[index];
-                            return _buildBarcodeCard(barcode);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryItem(String label, String value, IconData icon, Color color) {
-    return Container(
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBarcodeCard(BarcodeProduct barcode) {
-    return Card(
-      margin: EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        onTap: () {
-          // Show detail dialog
-          _showBarcodeDetail(barcode);
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  // Type Badge
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: barcode.type == BarcodeType.lusin
-                          ? Colors.orange.shade100
-                          : Colors.purple.shade100,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: barcode.type == BarcodeType.lusin
-                            ? Colors.orange
-                            : Colors.purple,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          barcode.type == BarcodeType.lusin
-                              ? Icons.layers
-                              : Icons.style,
-                          size: 14,
-                          color: barcode.type == BarcodeType.lusin
-                              ? Colors.orange.shade900
-                              : Colors.purple.shade900,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          barcode.typeLabel,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: barcode.type == BarcodeType.lusin
-                                ? Colors.orange.shade900
-                                : Colors.purple.shade900,
                           ),
                         ),
+                        
+                        // Bottom spacing for navigation bar
+                        SizedBox(height: 48),
                       ],
                     ),
                   ),
-                  Spacer(),
-                  // Remove button
-                  IconButton(
-                    icon: Icon(Icons.close, size: 20),
-                    color: Colors.red.shade400,
-                    onPressed: () => _removeBarcode(barcode),
-                    padding: EdgeInsets.zero,
-                    constraints: BoxConstraints(),
-                  ),
                 ],
               ),
-              SizedBox(height: 12),
-              Text(
-                barcode.displayName,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.warehouse, size: 16, color: Colors.grey.shade600),
-                  SizedBox(width: 4),
-                  Text(
-                    'Rak: ${barcode.rak}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                  SizedBox(width: 16),
-                  Icon(Icons.inventory_2, size: 16, color: Colors.grey.shade600),
-                  SizedBox(width: 4),
-                  Text(
-                    'Qty: ${barcode.qty}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade700,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.qr_code, size: 14, color: Colors.grey.shade500),
-                  SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      barcode.barcode,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                        fontFamily: 'monospace',
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              if (barcode.scannedAt != null) ...[
-                SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.access_time, size: 14, color: Colors.grey.shade500),
-                    SizedBox(width: 4),
-                    Text(
-                      'Scanned: ${_formatDateTime(barcode.scannedAt!)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showBarcodeDetail(BarcodeProduct barcode) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Detail Barcode'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildDetailRow('Barcode', barcode.barcode),
-              _buildDetailRow('Tipe', barcode.typeLabel),
-              _buildDetailRow('Model', barcode.model),
-              _buildDetailRow('Warna', barcode.warna),
-              _buildDetailRow('Size', barcode.size),
-              _buildDetailRow('Rak', barcode.rak),
-              _buildDetailRow('Qty', '${barcode.qty}'),
-              if (barcode.requestId != null)
-                _buildDetailRow('Request ID', barcode.requestId!),
-              if (barcode.scannedAt != null)
-                _buildDetailRow('Waktu Scan', _formatDateTime(barcode.scannedAt!)),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Tutup'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.grey.shade700,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(color: Colors.grey.shade900),
             ),
           ),
         ],
@@ -665,8 +625,71 @@ class _InboundScreenState extends State<InboundScreen> {
     );
   }
 
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  Widget _buildSummaryChip(String label, String value, IconData icon, Color color) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 24),
+        SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.grey.shade700,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBarcodeCard(bp.BarcodeProduct barcode) {
+    return Card(
+      margin: EdgeInsets.only(bottom: 8),
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ListTile(
+        leading: Container(
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: barcode.type == bp.BarcodeType.lusin
+                ? Colors.orange.shade100
+                : Colors.purple.shade100,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            barcode.type == bp.BarcodeType.lusin ? Icons.layers : Icons.style,
+            color: barcode.type == bp.BarcodeType.lusin
+                ? Colors.orange.shade900
+                : Colors.purple.shade900,
+            size: 20,
+          ),
+        ),
+        title: Text(
+          barcode.displayName,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Text(
+          'Qty: ${barcode.qty} • ${barcode.typeLabel}',
+          style: TextStyle(fontSize: 12),
+        ),
+        trailing: IconButton(
+          icon: Icon(Icons.close, size: 20, color: Colors.red),
+          onPressed: () => _removeBarcode(barcode),
+        ),
+      ),
+    );
   }
 }
-
