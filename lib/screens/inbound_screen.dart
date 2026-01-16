@@ -17,13 +17,14 @@ class InboundScreen extends StatefulWidget {
 
 class _InboundScreenState extends State<InboundScreen> {
   final MobileScannerController _scannerController = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
+    detectionSpeed: DetectionSpeed.normal,
   );
   
   List<bp.BarcodeProduct> _scannedBarcodes = [];
   bool _isListExpanded = true;
   bool _isSubmitting = false;
   bool _isLoadingWarehouses = true;
+  bool _warehouseLoadError = false;
   String? _selectedWarehouseId;
   final TextEditingController _notesController = TextEditingController();
   
@@ -39,14 +40,19 @@ class _InboundScreenState extends State<InboundScreen> {
   Future<void> _loadWarehouses() async {
     setState(() {
       _isLoadingWarehouses = true;
+      _warehouseLoadError = false;
     });
     
     try {
+      print('📦 Starting warehouse load...');
       final warehouses = await WarehouseService.getWarehouses();
+      print('📦 Got ${warehouses.length} warehouses');
+      
       if (mounted) {
         setState(() {
           _warehouses = warehouses;
           _isLoadingWarehouses = false;
+          _warehouseLoadError = warehouses.isEmpty;
           // Set default warehouse to first one
           if (_warehouses.isNotEmpty && _selectedWarehouseId == null) {
             _selectedWarehouseId = _warehouses[0].id;
@@ -54,10 +60,11 @@ class _InboundScreenState extends State<InboundScreen> {
         });
       }
     } catch (e) {
-      print('Error loading warehouses: $e');
+      print('❌ Error loading warehouses: $e');
       if (mounted) {
         setState(() {
           _isLoadingWarehouses = false;
+          _warehouseLoadError = true;
         });
       }
     }
@@ -671,30 +678,51 @@ class _InboundScreenState extends State<InboundScreen> {
                                   ],
                                 ),
                               )
-                            : DropdownButtonFormField<String>(
-                                value: _selectedWarehouseId,
-                                decoration: InputDecoration(
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                            : _warehouseLoadError || _warehouses.isEmpty
+                                ? Container(
+                                    padding: EdgeInsets.symmetric(vertical: 8),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.error_outline, color: Colors.red, size: 20),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Gagal memuat warehouse',
+                                            style: TextStyle(color: Colors.red),
+                                          ),
+                                        ),
+                                        TextButton.icon(
+                                          onPressed: _loadWarehouses,
+                                          icon: Icon(Icons.refresh, size: 18),
+                                          label: Text('Retry'),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : DropdownButtonFormField<String>(
+                                    value: _selectedWarehouseId,
+                                    decoration: InputDecoration(
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 12,
+                                      ),
+                                      isDense: true,
+                                    ),
+                                    items: _warehouses.map((warehouse) {
+                                      return DropdownMenuItem<String>(
+                                        value: warehouse.id,
+                                        child: Text(warehouse.displayName),
+                                      );
+                                    }).toList(),
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _selectedWarehouseId = value;
+                                      });
+                                    },
                                   ),
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 12,
-                                  ),
-                                  isDense: true,
-                                ),
-                                items: _warehouses.map((warehouse) {
-                                  return DropdownMenuItem<String>(
-                                    value: warehouse.id,
-                                    child: Text(warehouse.displayName),
-                                  );
-                                }).toList(),
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedWarehouseId = value;
-                                  });
-                                },
-                              ),
                         
                         SizedBox(height: 16),
                         
