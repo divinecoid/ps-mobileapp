@@ -44,37 +44,7 @@ class _InboundScreenState extends State<InboundScreen> {
   }
 
 
-  void _addDummyBarcode() {
-    // Generate dummy barcode untuk testing dengan format API:
-    // CMT_CODE|REQUEST_DATE|MODEL_SKU|COLOR_CODE|SIZE_CODE|TYPE|SEQUENCE
-    final now = DateTime.now();
-    final requestDate = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}162535';
-    
-    final dummyBarcodes = [
-      'CMT01|$requestDate|LC|RED|L|DOZEN|1',
-      'CMT01|$requestDate|LC|RED|M|PIECE|2',
-      'CMT01|$requestDate|LC|BLUE|XL|DOZEN|3',
-      'CMT01|$requestDate|LC|BLUE|S|PIECE|4',
-      'CMT01|$requestDate|TSH|GREEN|M|DOZEN|5',
-      'CMT01|$requestDate|TSH|GREEN|L|PIECE|6',
-      'CMT02|$requestDate|LPK|BLACK|XL|DOZEN|1',
-      'CMT02|$requestDate|LPK|BLACK|L|PIECE|2',
-    ];
 
-    // Ambil barcode yang belum pernah discan
-    final availableBarcodes = dummyBarcodes
-        .where((barcode) => !_scannedBarcodes.any((b) => b.barcode == barcode))
-        .toList();
-
-    if (availableBarcodes.isEmpty) {
-      Toast.show(context, 'Semua dummy barcode sudah di-scan');
-      return;
-    }
-
-    // Random atau ambil yang pertama
-    final barcode = availableBarcodes[0];
-    _handleBarcodeScanned(barcode);
-  }
 
   void _handleBarcodeScanned(String barcode) {
     // Parse barcode dari format API:
@@ -139,7 +109,7 @@ class _InboundScreenState extends State<InboundScreen> {
       ).markAsScanned();
 
       setState(() {
-        _scannedBarcodes.add(barcodeProduct);
+        _scannedBarcodes.insert(0, barcodeProduct); // Insert at top
       });
 
       // Play success beep untuk barcode berhasil discan
@@ -343,43 +313,25 @@ class _InboundScreenState extends State<InboundScreen> {
             ),
           ),
 
-          // Scan QR Code Button & Add Dummy Button
+          // Scan QR Code Button
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _startScanBarcode,
-                    icon: Icon(Icons.qr_code_scanner, size: 24),
-                    label: Text('Scan QR Code'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade700,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(vertical: 18),
-                      textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+              onPressed: _isLoading ? null : _startScanBarcode,
+              icon: Icon(Icons.qr_code_scanner, size: 24),
+              label: Text('Scan QR Code'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue.shade700,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 18),
+                textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _addDummyBarcode,
-                  icon: Icon(Icons.add_circle_outline, size: 20),
-                  label: Text('Dummy'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green.shade600,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 18, horizontal: 20),
-                    textStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
                 ),
-              ],
+              ),
             ),
           ),
 
@@ -717,3 +669,4 @@ class _InboundScreenState extends State<InboundScreen> {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }
+
