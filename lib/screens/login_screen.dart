@@ -91,17 +91,21 @@ class _LoginScreenState extends State<LoginScreen> {
               SizedBox(height: 30),
 
               ElevatedButton(
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => DashboardScreen()),
-                  );
-                },
+                onPressed: _loading ? null : _handleLogin,
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.symmetric(vertical: 14),
                   textStyle: TextStyle(fontSize: 16),
                 ),
-                child: Text("Login"),
+                child: _loading
+                    ? SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Text("Login"),
               ),
             ],
           ),
