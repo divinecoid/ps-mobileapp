@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/barcode_product.dart';
+import '../api/inbound_service.dart';
+import '../components/toast.dart';
 
-class InboundSummaryScreen extends StatelessWidget {
+class InboundSummaryScreen extends StatefulWidget {
   final List<BarcodeProduct> scannedBarcodes;
 
   const InboundSummaryScreen({
@@ -9,11 +11,206 @@ class InboundSummaryScreen extends StatelessWidget {
     required this.scannedBarcodes,
   });
 
+  @override
+  State<InboundSummaryScreen> createState() => _InboundSummaryScreenState();
+}
+
+class _InboundSummaryScreenState extends State<InboundSummaryScreen> {
+  bool _isSubmitting = false;
+  String? _selectedWarehouseId;
+  final TextEditingController _notesController = TextEditingController();
+
+  // TODO: Replace with real warehouse data from API
+  final List<Map<String, String>> _warehouses = [
+    {'id': '9d7e1234-5678-90ab-cdef-1234567890ab', 'name': 'Warehouse Main'},
+    {'id': '9d7e1234-5678-90ab-cdef-1234567890ac', 'name': 'Warehouse Secondary'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Set default warehouse
+    if (_warehouses.isNotEmpty) {
+      _selectedWarehouseId = _warehouses[0]['id'];
+    }
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitInbound() async {
+    if (_selectedWarehouseId == null) {
+      Toast.show(context, 'Pilih warehouse terlebih dahulu');
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      // Extract raw barcodes from scanned products
+      final barcodes = widget.scannedBarcodes.map((b) => b.barcode).toList();
+
+      // Call API
+      final result = await InboundService.submitInbound(
+        barcodes: barcodes,
+        warehouseId: _selectedWarehouseId!,
+        notes: _notesController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        // Show success message
+        final message = result['message'] ?? 'Inbound berhasil diproses';
+        
+        // Show success dialog with details
+        _showSuccessDialog(result['data'], result['errors']);
+      } else {
+        // Show error message
+        final message = result['message'] ?? 'Gagal memproses inbound';
+        final errors = result['errors'];
+        
+        _showErrorDialog(message, errors);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Toast.show(context, 'Error: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  void _showSuccessDialog(Map<String, dynamic>? data, List<dynamic>? errors) {
+    final summary = data?['summary'];
+    final hasErrors = errors != null && errors.isNotEmpty;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              hasErrors ? Icons.warning : Icons.check_circle,
+              color: hasErrors ? Colors.orange : Colors.green,
+              size: 28,
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                hasErrors ? 'Berhasil (dengan error)' : 'Berhasil!',
+                style: TextStyle(
+                  color: hasErrors ? Colors.orange : Colors.green,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (summary != null) ...[
+                Text('Total Scanned: ${summary['total_scanned']}'),
+                Text('Processed: ${summary['total_processed']}'),
+                if (summary['total_failed'] > 0)
+                  Text(
+                    'Failed: ${summary['total_failed']}',
+                    style: TextStyle(color: Colors.red),
+                  ),
+              ],
+              if (hasErrors) ...[
+                SizedBox(height: 16),
+                Text(
+                  'Errors:',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                ),
+                SizedBox(height: 8),
+                ...errors.map((error) => Padding(
+                      padding: EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '• ${error['barcode']}: ${error['error']}',
+                        style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+                      ),
+                    )),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context); // Back to inbound screen
+              Navigator.pop(context); // Clear scanned items
+            },
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showErrorDialog(String message, dynamic errors) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.error, color: Colors.red, size: 28),
+            SizedBox(width: 12),
+            Text('Error', style: TextStyle(color: Colors.red)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(message),
+              if (errors != null && errors is List && errors.isNotEmpty) ...[
+                SizedBox(height: 16),
+                Text(
+                  'Details:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 8),
+                ...errors.map((error) => Padding(
+                      padding: EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '• ${error.toString()}',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    )),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Group barcodes by model-warna-size-rak
   Map<String, List<BarcodeProduct>> _groupBarcodes() {
     final Map<String, List<BarcodeProduct>> grouped = {};
 
-    for (final barcode in scannedBarcodes) {
+    for (final barcode in widget.scannedBarcodes) {
       final key = '${barcode.model}|${barcode.warna}|${barcode.size}|${barcode.rak}';
       if (!grouped.containsKey(key)) {
         grouped[key] = [];
@@ -29,19 +226,19 @@ class InboundSummaryScreen extends StatelessWidget {
   }
 
   int get _totalItems {
-    return scannedBarcodes.fold(0, (sum, barcode) => sum + barcode.qty);
+    return widget.scannedBarcodes.fold(0, (sum, barcode) => sum + barcode.qty);
   }
 
   int get _totalBarcodes {
-    return scannedBarcodes.length;
+    return widget.scannedBarcodes.length;
   }
 
   int get _totalLusin {
-    return scannedBarcodes.where((b) => b.type == BarcodeType.lusin).length;
+    return widget.scannedBarcodes.where((b) => b.type == BarcodeType.lusin).length;
   }
 
   int get _totalSatuan {
-    return scannedBarcodes.where((b) => b.type == BarcodeType.satuan).length;
+    return widget.scannedBarcodes.where((b) => b.type == BarcodeType.satuan).length;
   }
 
   @override
@@ -147,7 +344,61 @@ class InboundSummaryScreen extends StatelessWidget {
             ),
           ),
 
-          // Grouped List
+          // Warehouse Selection & Notes
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Warehouse',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: _selectedWarehouseId,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                  items: _warehouses.map((warehouse) {
+                    return DropdownMenuItem<String>(
+                      value: warehouse['id'],
+                      child: Text(warehouse['name']!),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedWarehouseId = value;
+                    });
+                  },
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Catatan (Optional)',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                SizedBox(height: 8),
+                TextField(
+                  controller: _notesController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Masukkan catatan...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: EdgeInsets.all(12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          SizedBox(height: 16),
+
+          // Grouped List Header
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -204,6 +455,58 @@ class InboundSummaryScreen extends StatelessWidget {
                       );
                     },
                   ),
+          ),
+
+          // Submit Button
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: Offset(0, -2),
+                ),
+              ],
+            ),
+            child: ElevatedButton(
+              onPressed: _isSubmitting ? null : _submitInbound,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade600,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: _isSubmitting
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Text('Memproses...'),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.send, size: 24),
+                        SizedBox(width: 12),
+                        Text('Submit Inbound'),
+                      ],
+                    ),
+            ),
           ),
         ],
       ),
@@ -474,4 +777,3 @@ class InboundSummaryScreen extends StatelessWidget {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }
-

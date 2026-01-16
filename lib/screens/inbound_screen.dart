@@ -5,6 +5,7 @@ import '../models/barcode_product.dart';
 import 'barcode_scanner_screen.dart';
 import '../components/toast.dart';
 import 'inbound_summary_screen.dart';
+import '../utils/beep_service.dart';
 
 class InboundScreen extends StatefulWidget {
   const InboundScreen({super.key});
@@ -44,16 +45,20 @@ class _InboundScreenState extends State<InboundScreen> {
 
 
   void _addDummyBarcode() {
-    // Generate dummy barcode untuk testing
+    // Generate dummy barcode untuk testing dengan format API:
+    // CMT_CODE|REQUEST_DATE|MODEL_SKU|COLOR_CODE|SIZE_CODE|TYPE|SEQUENCE
+    final now = DateTime.now();
+    final requestDate = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}162535';
+    
     final dummyBarcodes = [
-      'LPK-MERAH-S-RAK01-001-LUSIN',
-      'LPK-MERAH-S-RAK01-002-LUSIN',
-      'LPK-MERAH-S-RAK01-001-PCS',
-      'LPK-MERAH-M-RAK01-001-PCS',
-      'LPK-MERAH-L-RAK01-001-LUSIN',
-      'LPK-MERAH-L-RAK01-001-PCS',
-      'LPK-BIRU-S-RAK02-001-LUSIN',
-      'LPK-BIRU-M-RAK02-001-PCS',
+      'CMT01|$requestDate|LC|RED|L|DOZEN|1',
+      'CMT01|$requestDate|LC|RED|M|PIECE|2',
+      'CMT01|$requestDate|LC|BLUE|XL|DOZEN|3',
+      'CMT01|$requestDate|LC|BLUE|S|PIECE|4',
+      'CMT01|$requestDate|TSH|GREEN|M|DOZEN|5',
+      'CMT01|$requestDate|TSH|GREEN|L|PIECE|6',
+      'CMT02|$requestDate|LPK|BLACK|XL|DOZEN|1',
+      'CMT02|$requestDate|LPK|BLACK|L|PIECE|2',
     ];
 
     // Ambil barcode yang belum pernah discan
@@ -72,77 +77,78 @@ class _InboundScreenState extends State<InboundScreen> {
   }
 
   void _handleBarcodeScanned(String barcode) {
-    // Simulasi: Parse barcode dan buat BarcodeProduct
-    // Dalam implementasi nyata, barcode akan digunakan untuk fetch data dari API
-    // atau parse dari format barcode yang sudah ditentukan
-    
-    // Contoh parsing barcode: LPK-MERAH-S-RAK01-001-LUSIN
-    // atau: LPK-MERAH-S-RAK01-001-PCS
+    // Parse barcode dari format API:
+    // CMT_CODE|REQUEST_DATE|MODEL_SKU|COLOR_CODE|SIZE_CODE|TYPE|SEQUENCE
     
     try {
-      // Trim whitespace dan normalize
-      final cleanedBarcode = barcode.trim().toUpperCase();
+      // Trim whitespace
+      final cleanedBarcode = barcode.trim();
       
       // Debug: print barcode yang dibaca
       print('Barcode scanned: $barcode');
-      print('Cleaned barcode: $cleanedBarcode');
       
-      // Cek apakah barcode sudah pernah discan (cek dengan cleaned version juga)
-      if (_scannedBarcodes.any((b) => b.barcode == barcode || b.barcode.toUpperCase() == cleanedBarcode)) {
+      // Cek apakah barcode sudah pernah discan
+      if (_scannedBarcodes.any((b) => b.barcode == cleanedBarcode)) {
+        // Play error beep untuk barcode yang sudah discan
+        BeepService.playErrorBeep();
         Toast.show(context, 'Barcode sudah pernah di-scan');
         return;
       }
 
-      // Parse barcode (contoh format: LPK-MERAH-S-RAK01-001-LUSIN)
-      // Handle berbagai format separator
-      final parts = cleanedBarcode.split(RegExp(r'[-_\s]+')).where((p) => p.isNotEmpty).toList();
+      // Parse barcode dengan separator pipe
+      final parts = cleanedBarcode.split('|');
       
       print('Parsed parts: $parts (length: ${parts.length})');
       
-      if (parts.length < 6) {
-        // Coba format alternatif jika kurang dari 6 bagian
-        // Mungkin formatnya berbeda atau ada whitespace
-        Toast.show(context, 'Format barcode tidak valid. Ditemukan: ${parts.length} bagian. Barcode: $cleanedBarcode');
+      if (parts.length != 7) {
+        // Play error beep untuk format tidak valid
+        BeepService.playErrorBeep();
+        Toast.show(context, 'Format barcode tidak valid. Expected 7 parts, got ${parts.length}');
         return;
       }
 
-      final model = parts[0].trim(); // LPK
-      final warna = parts[1].trim(); // MERAH
-      final size = parts[2].trim(); // S atau L
-      final rak = parts[3].trim(); // RAK01
-      final sequence = parts[4].trim(); // 001
-      final typeStr = parts[5].trim(); // LUSIN atau PCS
+      final cmtCode = parts[0].trim();
+      final requestDate = parts[1].trim();
+      final modelSku = parts[2].trim();
+      final colorCode = parts[3].trim();
+      final sizeCode = parts[4].trim();
+      final typeStr = parts[5].trim();
+      final sequence = parts[6].trim();
 
-      print('Parsed: model=$model, warna=$warna, size=$size, rak=$rak, sequence=$sequence, type=$typeStr');
+      print('Parsed: cmt=$cmtCode, date=$requestDate, model=$modelSku, color=$colorCode, size=$sizeCode, type=$typeStr, seq=$sequence');
 
-      final type = typeStr.contains('LUSIN') 
+      final type = typeStr.toUpperCase() == 'DOZEN' 
           ? BarcodeType.lusin 
           : BarcodeType.satuan;
       
       final qty = type == BarcodeType.lusin ? 12 : 1;
 
-      // Untuk demo, gunakan nama model yang lebih readable
-      final modelName = _getModelName(model);
-      final warnaName = _getWarnaName(warna);
+      // Untuk demo, gunakan nama yang lebih readable
+      final modelName = _getModelName(modelSku);
+      final colorName = _getColorName(colorCode);
 
       final barcodeProduct = BarcodeProduct(
-        barcode: cleanedBarcode, // Simpan dalam format cleaned
+        barcode: cleanedBarcode, // Simpan barcode original
         type: type,
         model: modelName,
-        warna: warnaName,
-        size: size,
-        rak: rak,
+        warna: colorName,
+        size: sizeCode,
+        rak: cmtCode, // Sementara gunakan CMT code sebagai rak identifier
         qty: qty,
-        requestId: 'REQ-2024-001',
+        requestId: 'REQ-$cmtCode-$requestDate',
       ).markAsScanned();
 
       setState(() {
         _scannedBarcodes.add(barcodeProduct);
       });
 
+      // Play success beep untuk barcode berhasil discan
+      BeepService.playSuccessBeep();
       Toast.show(context, 'Barcode berhasil di-scan: ${barcodeProduct.typeLabel}');
     } catch (e) {
       print('Error parsing barcode: $e');
+      // Play error beep untuk error
+      BeepService.playErrorBeep();
       Toast.show(context, 'Error parsing barcode: $e');
     }
   }
@@ -150,22 +156,28 @@ class _InboundScreenState extends State<InboundScreen> {
   String _getModelName(String code) {
     // Mapping kode ke nama model
     final modelMap = {
+      'LC': 'LENGAN PANJANG KERAH',
       'LPK': 'LENGAN PANJANG KERAH',
       'LPS': 'LENGAN PENDEK',
       'TSH': 'T-SHIRT',
     };
-    return modelMap[code] ?? code;
+    return modelMap[code.toUpperCase()] ?? code;
   }
 
-  String _getWarnaName(String code) {
+  String _getColorName(String code) {
     // Mapping kode warna ke nama warna
-    final warnaMap = {
+    final colorMap = {
+      'RED': 'Merah',
+      'BLUE': 'Biru',
+      'BLACK': 'Hitam',
+      'WHITE': 'Putih',
+      'GREEN': 'Hijau',
       'MERAH': 'Merah',
       'BIRU': 'Biru',
       'HITAM': 'Hitam',
       'PUTIH': 'Putih',
     };
-    return warnaMap[code] ?? code;
+    return colorMap[code.toUpperCase()] ?? code;
   }
 
   void _removeBarcode(BarcodeProduct barcode) {

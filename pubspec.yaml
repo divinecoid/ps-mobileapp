@@ -38,6 +38,7 @@ dependencies:
   mobile_scanner: ^5.0.0
   flutter_launcher_icons: ^0.14.4
   fl_chart: ^0.69.0
+  flutter_beep: ^1.0.0
 
 flutter_launcher_icons:
   android: true
