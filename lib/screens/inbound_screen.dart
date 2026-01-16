@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../components/app_drawer.dart';
 import '../utils/navigation_helper.dart';
@@ -7,6 +8,8 @@ import '../components/toast.dart';
 import '../utils/beep_service.dart';
 import '../api/inbound_service.dart';
 import '../api/warehouse_service.dart';
+import 'barcode_scanner_screen.dart';
+import 'dart:convert';
 
 class InboundScreen extends StatefulWidget {
   const InboundScreen({super.key});
@@ -349,51 +352,228 @@ class _InboundScreenState extends State<InboundScreen> {
   }
 
   void _showSuccessDialog(Map<String, dynamic>? data, List<dynamic>? errors) {
+    print('📋 Errors received in dialog: $errors');
     final summary = data?['summary'];
     final hasErrors = errors != null && errors.isNotEmpty;
 
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(
-              hasErrors ? Icons.warning : Icons.check_circle,
-              color: hasErrors ? Colors.orange : Colors.green,
-              size: 28,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        elevation: 8,
+        child: Container(
+          padding: EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: hasErrors 
+                  ? [Colors.orange.shade50, Colors.white]
+                  : [Colors.green.shade50, Colors.white],
             ),
-            SizedBox(width: 12),
-            Text(hasErrors ? 'Berhasil (dengan error)' : 'Berhasil!'),
-          ],
-        ),
-        content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (summary != null) ...[
-              Text('Total Scanned: ${summary['total_scanned']}'),
-              Text('Processed: ${summary['total_processed']}'),
-              if (summary['total_failed'] > 0)
-                Text('Failed: ${summary['total_failed']}',
-                    style: TextStyle(color: Colors.red)),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              // Clear scanned items
-              setState(() {
-                _scannedBarcodes.clear();
-                _notesController.clear();
-              });
-            },
-            child: Text('OK'),
           ),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon with circular background
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: hasErrors ? Colors.orange.shade100 : Colors.green.shade100,
+                ),
+                child: Icon(
+                  hasErrors ? Icons.warning_amber_rounded : Icons.check_circle_rounded,
+                  color: hasErrors ? Colors.orange.shade700 : Colors.green.shade700,
+                  size: 40,
+                ),
+              ),
+              
+              SizedBox(height: 20),
+              
+              // Title
+              Text(
+                hasErrors ? 'Berhasil dengan Error' : 'Berhasil!',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+                textAlign: TextAlign.center,
+              ),
+              
+              SizedBox(height: 8),
+              
+              // Subtitle
+              Text(
+                hasErrors 
+                    ? 'Beberapa item gagal diproses'
+                    : 'Semua item berhasil diproses',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+                textAlign: TextAlign.center,
+              ),
+              
+              SizedBox(height: 24),
+              
+              // Summary cards
+              if (summary != null) ...[
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildSummaryRow(
+                        'Total Scanned',
+                        '${summary['total_scanned']}',
+                        Icons.qr_code_scanner,
+                        Colors.blue,
+                      ),
+                      SizedBox(height: 12),
+                      _buildSummaryRow(
+                        'Processed',
+                        '${summary['total_processed']}',
+                        Icons.check_circle_outline,
+                        Colors.green,
+                      ),
+                      if (summary['total_failed'] > 0) ...[
+                        SizedBox(height: 12),
+                        _buildSummaryRow(
+                          'Failed',
+                          '${summary['total_failed']}',
+                          Icons.error_outline,
+                          Colors.red,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+              
+              SizedBox(height: 24),
+              
+              // Copy Error Button (only show if there are errors)
+              if (hasErrors && errors != null) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      // Format errors as JSON string
+                      final errorText = JsonEncoder.withIndent('  ').convert(errors);
+                      await Clipboard.setData(ClipboardData(text: errorText));
+                      
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                                SizedBox(width: 8),
+                                Text('Error details copied to clipboard'),
+                              ],
+                            ),
+                            backgroundColor: Colors.green.shade600,
+                            duration: Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    icon: Icon(Icons.copy, size: 18),
+                    label: Text('Copy Error Details'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.orange.shade700,
+                      side: BorderSide(color: Colors.orange.shade300),
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
+              ],
+              
+              // OK Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    setState(() {
+                      _scannedBarcodes.clear();
+                      _notesController.clear();
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: hasErrors ? Colors.orange.shade600 : Colors.green.shade600,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 2,
+                  ),
+                  child: Text(
+                    'OK',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
+    );
+  }
+
+  Widget _buildSummaryRow(String label, String value, IconData icon, Color color) {
+    return Row(
+      children: [
+        Container(
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 20, color: color),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[700],
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[800],
+          ),
+        ),
+      ],
     );
   }
 
