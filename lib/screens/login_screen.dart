@@ -97,7 +97,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   textStyle: TextStyle(fontSize: 16),
                 ),
                 child: _loading
-                    ? CircularProgressIndicator(color: Colors.white)
+                    ? SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
                     : Text("Login"),
               ),
             ],

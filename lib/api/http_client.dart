@@ -1,82 +1,124 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../utils/secure_storage.dart';
-import 'auth_service.dart';
+import '../utils/auth_event_bus.dart';
 
 class ApiClient {
-  static String _normalizeBaseUrl(String? url) {
-    if (url == null || url.isEmpty) {
-      throw Exception('API_URL tidak ditemukan di .env file');
-    }
-    
-    // Trim whitespace
-    url = url.trim();
-    
-    // Jika URL tidak memiliki scheme, tambahkan http://
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      // Extract host (sebelum : atau /)
-      final hostPart = url.split(':').first.split('/').first;
-      
-      // Untuk localhost/127.0.0.1/10.0.2.2/IP address, gunakan http://
-      final isLocalOrIP = hostPart == 'localhost' || 
-          hostPart == '127.0.0.1' || 
-          hostPart == '10.0.2.2' ||
-          RegExp(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$').hasMatch(hostPart);
-      
-      if (isLocalOrIP) {
-        url = 'http://$url';
-      } else {
-        // Default ke https:// untuk production domain
-        url = 'https://$url';
-      }
-    }
-    
-    // Pastikan URL tidak berakhir dengan slash (kecuali jika ada path seperti /api)
-    // Hapus trailing slash hanya jika tidak ada path
-    if (url.endsWith('/') && !url.contains('/api')) {
-      url = url.substring(0, url.length - 1);
-    }
-    
-    // Normalize: pastikan tidak ada double slash kecuali setelah scheme
-    url = url.replaceAll(RegExp(r'(?<!:)/+'), '/');
-    
-    return url;
-  }
-
-  static Dio? _dioInstance;
+  static Completer<bool>? _refreshCompleter;
   
-  static Dio get dio {
-    if (_dioInstance == null) {
-      final apiUrl = dotenv.env['API_URL'];
-      print('API_URL from .env: $apiUrl');
-      
-      final normalizedUrl = _normalizeBaseUrl(apiUrl);
-      print('Normalized API URL: $normalizedUrl');
-      
-      _dioInstance = Dio(
-        BaseOptions(
-          baseUrl: normalizedUrl,
-          headers: {"Accept": "application/json"},
-          connectTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(seconds: 30),
-        ),
-      )..interceptors.add(InterceptorsWrapper(
+  static final Dio dio = Dio(
+    BaseOptions(
+      baseUrl: dotenv.env['API_URL']!,
+      headers: {"Accept": "application/json"},
+    ),
+  )..interceptors.add(InterceptorsWrapper(
+      onResponse: (Response response, ResponseInterceptorHandler handler) {
+        // Check if response has success: false with "Token expired" message
+        if (response.data is Map && 
+            response.data['success'] == false && 
+            response.data['message']?.toString().toLowerCase().contains('token') == true) {
+          print('⚠️ Token expired detected in response: ${response.data['message']}');
+          
+          // Clear storage and trigger logout
+          AppStorage.clear();
+          AuthEventBus.notifyTokenExpired();
+          
+          // Return error to prevent further processing
+          return handler.reject(
+            DioException(
+              requestOptions: response.requestOptions,
+              response: response,
+              type: DioExceptionType.badResponse,
+              error: 'Token expired',
+            ),
+          );
+        }
+        
+        return handler.next(response);
+      },
       onError: (DioException error, ErrorInterceptorHandler handler) async {
         // If token expired (Laravel returns 401)
         if (error.response?.statusCode == 401) {
-          final refreshed = await AuthService.refresh();
-
-          if (refreshed) {
-            // Retry original request with new token
-            final newToken = await AppStorage.getAccessToken();
-            error.requestOptions.headers["Authorization"] = "Bearer $newToken";
-
-            final cloneReq = await dio.fetch(error.requestOptions);
-            return handler.resolve(cloneReq);
+          // Check if this is the refresh endpoint itself failing
+          if (error.requestOptions.path.contains('/auth/refresh')) {
+            print('❌ Refresh endpoint failed - clearing storage and redirecting to login');
+            _refreshCompleter = null;
+            await AppStorage.clear();
+            AuthEventBus.notifyTokenExpired();
+            return handler.next(error);
           }
-
-          // If refresh also failed → force logout
-          await AuthService.logout();
+          
+          // If already refreshing, wait for the existing refresh to complete
+          if (_refreshCompleter != null) {
+            print('⏳ Waiting for ongoing refresh to complete...');
+            try {
+              final refreshed = await _refreshCompleter!.future;
+              
+              if (refreshed) {
+                print('✅ Using refreshed token, retrying request');
+                final newToken = await AppStorage.getAccessToken();
+                error.requestOptions.headers["Authorization"] = "Bearer $newToken";
+                final cloneReq = await dio.fetch(error.requestOptions);
+                return handler.resolve(cloneReq);
+              } else {
+                print('❌ Refresh failed, rejecting request');
+                return handler.next(error);
+              }
+            } catch (e) {
+              print('❌ Error waiting for refresh: $e');
+              return handler.next(error);
+            }
+          }
+          
+          // Start new refresh process
+          print('⚠️ 401 Unauthorized - attempting token refresh');
+          _refreshCompleter = Completer<bool>();
+          
+          try {
+            // Try to refresh token
+            final refreshToken = await AppStorage.getRefreshToken();
+            if (refreshToken == null) {
+              print('❌ No refresh token found');
+              _refreshCompleter!.complete(false);
+              await AppStorage.clear();
+              AuthEventBus.notifyTokenExpired();
+              return handler.next(error);
+            }
+            
+            final response = await dio.post(
+              '/auth/refresh',
+              data: {'refresh_token': refreshToken},
+            );
+            
+            if (response.data['token'] != null) {
+              final newAccessToken = response.data['token'];
+              await AppStorage.setAccessToken(newAccessToken);
+              setToken(newAccessToken);
+              
+              _refreshCompleter!.complete(true);
+              print('✅ Token refreshed successfully, retrying request');
+              
+              error.requestOptions.headers["Authorization"] = "Bearer $newAccessToken";
+              final cloneReq = await dio.fetch(error.requestOptions);
+              return handler.resolve(cloneReq);
+            } else {
+              print('❌ Token refresh failed - no token in response');
+              _refreshCompleter!.complete(false);
+              await AppStorage.clear();
+              AuthEventBus.notifyTokenExpired();
+            }
+          } catch (e) {
+            print('❌ Exception during refresh: $e');
+            _refreshCompleter!.completeError(e);
+            await AppStorage.clear();
+            AuthEventBus.notifyTokenExpired();
+          } finally {
+            // Reset completer after a short delay
+            Future.delayed(Duration(milliseconds: 100), () {
+              _refreshCompleter = null;
+            });
+          }
         }
 
         return handler.next(error);
