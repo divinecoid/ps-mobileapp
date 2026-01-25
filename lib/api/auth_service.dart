@@ -7,14 +7,27 @@ class AuthService {
   /// LOGIN → Calls Laravel /login endpoint
   static Future<bool> login(String username, String password) async {
     try {
+      print('🔐 Attempting login for username: $username');
+      print('📡 API URL: ${ApiClient.dio.options.baseUrl}${Endpoint.login}');
+
       final response = await ApiClient.dio.post(
         Endpoint.login,
         data: {'username': username, 'password': password},
       );
 
+      print('✅ Login response status: ${response.statusCode}');
+      print('📦 Login response data: ${response.data}');
+
       // Extract tokens from backend response
       final accessToken = response.data['token'];
       final refreshToken = response.data['refresh_token'];
+
+      if (accessToken == null || refreshToken == null) {
+        print('❌ Missing tokens in response!');
+        print('   - accessToken: $accessToken');
+        print('   - refreshToken: $refreshToken');
+        return false;
+      }
 
       // Store tokens securely
       await AppStorage.setAccessToken(accessToken);
@@ -23,8 +36,18 @@ class AuthService {
       // Apply token to headers for future API calls
       ApiClient.setToken(accessToken);
 
+      print('✅ Login successful! Tokens stored.');
       return true;
     } on DioException catch (e) {
+      print('❌ Login failed with DioException:');
+      print('   - Type: ${e.type}');
+      print('   - Message: ${e.message}');
+      print('   - Status Code: ${e.response?.statusCode}');
+      print('   - Response Data: ${e.response?.data}');
+      print('   - Error: ${e.error}');
+      return false;
+    } catch (e) {
+      print('❌ Login failed with unexpected error: $e');
       return false;
     }
   }

@@ -11,21 +11,25 @@ class ApiClient {
   static final Dio dio = Dio(
     BaseOptions(
       baseUrl: dotenv.env['API_URL']!,
-      headers: {'Accept': 'application/json'},
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 15),
     ),
   )..interceptors.add(InterceptorsWrapper(onError: _onError));
 
-  /// Dio khusus refresh token (NO interceptor)
   static final Dio _refreshDio = Dio(
     BaseOptions(
       baseUrl: dotenv.env['API_URL']!,
-      headers: {'Accept': 'application/json'},
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
     ),
   );
 
-  /// Global error handler
   static Future<void> _onError(
     DioException error,
     ErrorInterceptorHandler handler,
@@ -34,26 +38,16 @@ class ApiClient {
       return handler.next(error);
     }
 
-    final path = error.requestOptions.path;
-
-    // Kalau refresh sendiri gagal → logout paksa
-    if (path.contains(Endpoint.refresh)) {
+    if (error.requestOptions.path.contains(Endpoint.refresh)) {
       await _forceLogout();
       return handler.next(error);
     }
 
-    // Kalau ada refresh ongoing → tunggu
     if (_refreshCompleter != null) {
-      try {
-        final success = await _refreshCompleter!.future;
-        if (success) {
-          final newToken = await AppStorage.getAccessToken();
-          error.requestOptions.headers['Authorization'] = 'Bearer $newToken';
-
-          final retry = await dio.fetch(error.requestOptions);
-          return handler.resolve(retry);
-        }
-      } catch (_) {}
+      final ok = await _refreshCompleter!.future;
+      if (ok) {
+        return _retry(error, handler);
+      }
       return handler.next(error);
     }
 
@@ -61,35 +55,23 @@ class ApiClient {
 
     try {
       final refreshToken = await AppStorage.getRefreshToken();
-      if (refreshToken == null) {
-        _refreshCompleter!.complete(false);
-        await _forceLogout();
-        return handler.next(error);
-      }
+      if (refreshToken == null) throw Exception('No refresh token');
 
-      final response = await _refreshDio.post(
+      final res = await _refreshDio.post(
         Endpoint.refresh,
         data: {'refresh_token': refreshToken},
       );
 
-      final newToken = response.data['token'];
-      if (newToken == null) {
-        _refreshCompleter!.complete(false);
-        await _forceLogout();
-        return handler.next(error);
-      }
+      final newToken = res.data['token'];
+      if (newToken == null) throw Exception('No token');
 
       await AppStorage.setAccessToken(newToken);
       setToken(newToken);
 
       _refreshCompleter!.complete(true);
-
-      error.requestOptions.headers['Authorization'] = 'Bearer $newToken';
-
-      final retry = await dio.fetch(error.requestOptions);
-      return handler.resolve(retry);
+      return _retry(error, handler);
     } catch (e) {
-      _refreshCompleter!.completeError(e);
+      _refreshCompleter!.complete(false);
       await _forceLogout();
       return handler.next(error);
     } finally {
@@ -97,15 +79,35 @@ class ApiClient {
     }
   }
 
-        return handler.next(error);
-      },
-    ));
+  static Future<void> _retry(
+    DioException error,
+    ErrorInterceptorHandler handler,
+  ) async {
+    final opts = Options(
+      method: error.requestOptions.method,
+      headers: error.requestOptions.headers,
+    );
 
-  static void setToken(String token) {
-    dio.options.headers['Authorization'] = 'Bearer $token';
+    final response = await dio.request(
+      error.requestOptions.path,
+      data: error.requestOptions.data,
+      queryParameters: error.requestOptions.queryParameters,
+      options: opts,
+    );
+
+    return handler.resolve(response);
   }
-  
-  static void reset() {
-    dio.options.headers.remove("Authorization");
+
+  static void setToken(String? token) {
+    if (token == null || token.isEmpty) {
+      dio.options.headers.remove('Authorization');
+    } else {
+      dio.options.headers['Authorization'] = 'Bearer $token';
+    }
+  }
+
+  static Future<void> _forceLogout() async {
+    await AppStorage.clear();
+    AuthEventBus.notifyTokenExpired();
   }
 }
