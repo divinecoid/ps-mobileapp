@@ -38,7 +38,7 @@ dependencies:
   mobile_scanner: ^5.0.0
   flutter_launcher_icons: ^0.14.4
   fl_chart: ^0.69.0
-  flutter_beep: ^1.0.0
+  audioplayers: ^6.1.0
   intl: ^0.19.0
 
 flutter_launcher_icons:
@@ -69,6 +69,8 @@ flutter:
   uses-material-design: true
   assets:
     - .env
+    - assets/audio/correct.mp3
+    - assets/audio/wrong.mp3
 
   # To add assets to your application, add an assets section, like this:
   # assets:

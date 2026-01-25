@@ -5,7 +5,7 @@ import '../components/app_drawer.dart';
 import '../utils/navigation_helper.dart';
 import '../models/barcode_product.dart' as bp;
 import '../components/toast.dart';
-import '../utils/beep_service.dart';
+import '../utils/sound_service.dart';
 import '../api/inbound_service.dart';
 import '../api/warehouse_service.dart';
 import '../api/rack_service.dart';
@@ -220,7 +220,7 @@ class _InboundScreenState extends State<InboundScreen> {
       // Cek apakah barcode sudah pernah discan
       if (_scannedBarcodes.any((b) => b.barcode == cleanedBarcode)) {
         // Play error beep untuk barcode yang sudah discan
-        BeepService.playErrorBeep();
+        SoundService().playError();
         Toast.show(context, '⚠️ Barcode sudah pernah di-scan');
         return;
       }
@@ -232,7 +232,7 @@ class _InboundScreenState extends State<InboundScreen> {
       
       if (parts.length != 7) {
         // Play error beep untuk format tidak valid
-        BeepService.playErrorBeep();
+        SoundService().playError();
         Toast.show(context, '❌ Format barcode tidak valid');
         return;
       }
@@ -273,7 +273,7 @@ class _InboundScreenState extends State<InboundScreen> {
           _scannedBarcodes.insert(0, barcodeProduct);
         });
 
-        BeepService.playSuccessBeep();
+        SoundService().playSuccess();
         Toast.show(context, '✅ ${barcodeProduct.typeLabel} terscan');
       } else {
         // Piece barcode - show rack selection dialog
@@ -290,7 +290,7 @@ class _InboundScreenState extends State<InboundScreen> {
       }
     } catch (e) {
       print('Error parsing barcode: $e');
-      BeepService.playErrorBeep();
+      SoundService().playError();
       Toast.show(context, '❌ Error parsing barcode');
     }
   }
@@ -466,7 +466,7 @@ class _InboundScreenState extends State<InboundScreen> {
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
-                BeepService.playErrorBeep();
+                SoundService().playError();
                 Toast.show(context, '❌ Barcode dibatalkan');
               },
               child: Text('Batal', style: TextStyle(color: Colors.grey)),
@@ -494,7 +494,7 @@ class _InboundScreenState extends State<InboundScreen> {
                         _scannedBarcodes.insert(0, barcodeProduct);
                       });
 
-                      BeepService.playSuccessBeep();
+                      SoundService().playSuccess();
                       Toast.show(context, '✅ ${barcodeProduct.typeLabel} terscan');
                     },
               style: ElevatedButton.styleFrom(
