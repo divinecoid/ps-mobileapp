@@ -21,10 +21,14 @@ class BarcodeProduct {
   /// Size baju (contoh: S, M, L)
   final String size;
   
-  /// Rak tempat penyimpanan (contoh: RAK01, RAK A, RAK B)
+  /// Rak tempat penyimpanan dari CMT (contoh: RAK01, RAK A, RAK B)
   /// Per warna di model punya rak sendiri sesuai master data
   /// 1 Rak bisa banyak warna dan 1 warna bisa banyak Rak
   final String rak;
+  
+  /// Rack ID untuk piece items - UUID yang dipilih user saat scan
+  /// Diperlukan untuk barcodes_piece saat submit ke API
+  final String? rackId;
   
   /// Jumlah item yang diwakili oleh barcode ini
   /// - Untuk lusin: biasanya 12, tapi bisa kurang jika sisa
@@ -47,6 +51,7 @@ class BarcodeProduct {
     required this.warna,
     required this.size,
     required this.rak,
+    this.rackId,
     required this.qty,
     this.isScanned = false,
     this.scannedAt,
@@ -61,6 +66,7 @@ class BarcodeProduct {
     String? warna,
     String? size,
     String? rak,
+    String? rackId,
     int? qty,
     bool? isScanned,
     DateTime? scannedAt,
@@ -73,6 +79,7 @@ class BarcodeProduct {
       warna: warna ?? this.warna,
       size: size ?? this.size,
       rak: rak ?? this.rak,
+      rackId: rackId ?? this.rackId,
       qty: qty ?? this.qty,
       isScanned: isScanned ?? this.isScanned,
       scannedAt: scannedAt ?? this.scannedAt,
@@ -120,6 +127,7 @@ class BarcodeProduct {
       'warna': warna,
       'size': size,
       'rak': rak,
+      'rackId': rackId,
       'qty': qty,
       'isScanned': isScanned,
       'scannedAt': scannedAt?.toIso8601String(),
@@ -139,6 +147,7 @@ class BarcodeProduct {
       warna: json['warna'] as String,
       size: json['size'] as String,
       rak: json['rak'] as String,
+      rackId: json['rackId'] as String?,
       qty: json['qty'] as int,
       isScanned: json['isScanned'] as bool? ?? false,
       scannedAt: json['scannedAt'] != null

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import '../utils/beep_service.dart';
+import '../utils/sound_service.dart';
 
 enum ScanType {
   barcode,
@@ -123,7 +123,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         if (widget.scannedBarcodes != null && widget.scannedBarcodes!.contains(bestCode)) {
           print('⚠️ Duplicate barcode detected: $bestCode');
           // Play error beep for duplicate scan
-          BeepService.playErrorBeep();
+          SoundService().playError();
           
           // Show error feedback to user
           if (mounted) {
@@ -143,7 +143,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         });
 
         // Play success beep for new scan
-        BeepService.playSuccessBeep();
+        SoundService().playSuccess();
 
         // Vibrate feedback
         // HapticFeedback.lightImpact();

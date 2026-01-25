@@ -5,10 +5,11 @@ import '../components/app_drawer.dart';
 import '../utils/navigation_helper.dart';
 import '../models/barcode_product.dart' as bp;
 import '../components/toast.dart';
-import '../utils/beep_service.dart';
+import '../utils/sound_service.dart';
 import '../api/inbound_service.dart';
 import '../api/warehouse_service.dart';
-import 'barcode_scanner_screen.dart';
+import '../api/rack_service.dart';
+import 'inbound_list_screen.dart';
 import 'dart:convert';
 
 class InboundScreen extends StatefulWidget {
@@ -28,16 +29,22 @@ class _InboundScreenState extends State<InboundScreen> {
   bool _isSubmitting = false;
   bool _isLoadingWarehouses = true;
   bool _warehouseLoadError = false;
+  bool _isLoadingRacks = true;
+  bool _rackLoadError = false;
   String? _selectedWarehouseId;
   final TextEditingController _notesController = TextEditingController();
   
   // Warehouse data from API
   List<Warehouse> _warehouses = [];
+  
+  // Rack data from API
+  List<Rack> _racks = [];
 
   @override
   void initState() {
     super.initState();
     _loadWarehouses();
+    _loadRacks();
   }
 
   Future<void> _loadWarehouses() async {
@@ -68,6 +75,35 @@ class _InboundScreenState extends State<InboundScreen> {
         setState(() {
           _isLoadingWarehouses = false;
           _warehouseLoadError = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadRacks() async {
+    setState(() {
+      _isLoadingRacks = true;
+      _rackLoadError = false;
+    });
+    
+    try {
+      print('🗄️ Starting rack load...');
+      final racks = await RackService.getRacks();
+      print('🗄️ Got ${racks.length} racks');
+      
+      if (mounted) {
+        setState(() {
+          _racks = racks;
+          _isLoadingRacks = false;
+          _rackLoadError = racks.isEmpty;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading racks: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingRacks = false;
+          _rackLoadError = true;
         });
       }
     }
@@ -171,7 +207,8 @@ class _InboundScreenState extends State<InboundScreen> {
 
   void _handleBarcodeScanned(String barcode) {
     // Parse barcode dari format API:
-    // CMT_CODE|REQUEST_DATE|MODEL_SKU|COLOR_CODE|SIZE_CODE|TYPE|SEQUENCE
+    // CMT_CODE|TIMESTAMP|MODEL_SKU|COLOR_CODE|SIZE_CODE|GROUP|SEQUENCE
+    // Group kosong untuk piece, terisi untuk dozen
     
     try {
       // Trim whitespace
@@ -183,7 +220,7 @@ class _InboundScreenState extends State<InboundScreen> {
       // Cek apakah barcode sudah pernah discan
       if (_scannedBarcodes.any((b) => b.barcode == cleanedBarcode)) {
         // Play error beep untuk barcode yang sudah discan
-        BeepService.playErrorBeep();
+        SoundService().playError();
         Toast.show(context, '⚠️ Barcode sudah pernah di-scan');
         return;
       }
@@ -195,55 +232,284 @@ class _InboundScreenState extends State<InboundScreen> {
       
       if (parts.length != 7) {
         // Play error beep untuk format tidak valid
-        BeepService.playErrorBeep();
+        SoundService().playError();
         Toast.show(context, '❌ Format barcode tidak valid');
         return;
       }
 
       final cmtCode = parts[0].trim();
-      final requestDate = parts[1].trim();
+      final timestamp = parts[1].trim();
       final modelSku = parts[2].trim();
       final colorCode = parts[3].trim();
       final sizeCode = parts[4].trim();
-      final typeStr = parts[5].trim();
+      final group = parts[5].trim(); // Kosong untuk piece, terisi untuk dozen
       final sequence = parts[6].trim();
 
-      print('Parsed: cmt=$cmtCode, date=$requestDate, model=$modelSku, color=$colorCode, size=$sizeCode, type=$typeStr, seq=$sequence');
+      print('Parsed: cmt=$cmtCode, timestamp=$timestamp, model=$modelSku, color=$colorCode, size=$sizeCode, group=$group, seq=$sequence');
 
-      final type = typeStr.toUpperCase() == 'DOZEN' 
-          ? bp.BarcodeType.lusin 
-          : bp.BarcodeType.satuan;
-      
-      final qty = type == bp.BarcodeType.lusin ? 12 : 1;
+      // Determine type based on GROUP field (empty = piece, filled = dozen)
+      final isDozen = group.isNotEmpty;
+      final type = isDozen ? bp.BarcodeType.lusin : bp.BarcodeType.satuan;
+      final qty = isDozen ? 12 : 1;
 
       // Untuk demo, gunakan nama yang lebih readable
       final modelName = _getModelName(modelSku);
       final colorName = _getColorName(colorCode);
 
-      final barcodeProduct = bp.BarcodeProduct(
-        barcode: cleanedBarcode, // Simpan barcode original
-        type: type,
-        model: modelName,
-        warna: colorName,
-        size: sizeCode,
-        rak: cmtCode, // Sementara gunakan CMT code sebagai rak identifier
-        qty: qty,
-        requestId: 'REQ-$cmtCode-$requestDate',
-      ).markAsScanned();
+      if (isDozen) {
+        // Dozen barcode - add directly without rack selection
+        final barcodeProduct = bp.BarcodeProduct(
+          barcode: cleanedBarcode,
+          type: type,
+          model: modelName,
+          warna: colorName,
+          size: sizeCode,
+          rak: cmtCode,
+          qty: qty,
+          requestId: 'REQ-$cmtCode-$timestamp',
+        ).markAsScanned();
 
-      setState(() {
-        _scannedBarcodes.insert(0, barcodeProduct); // Insert at top
-      });
+        setState(() {
+          _scannedBarcodes.insert(0, barcodeProduct);
+        });
 
-      // Play success beep untuk barcode berhasil discan
-      BeepService.playSuccessBeep();
-      Toast.show(context, '✅ ${barcodeProduct.typeLabel} terscan');
+        SoundService().playSuccess();
+        Toast.show(context, '✅ ${barcodeProduct.typeLabel} terscan');
+      } else {
+        // Piece barcode - show rack selection dialog
+        _showRackSelectionDialog(
+          cleanedBarcode: cleanedBarcode,
+          type: type,
+          modelName: modelName,
+          colorName: colorName,
+          sizeCode: sizeCode,
+          cmtCode: cmtCode,
+          qty: qty,
+          timestamp: timestamp,
+        );
+      }
     } catch (e) {
       print('Error parsing barcode: $e');
-      // Play error beep untuk error
-      BeepService.playErrorBeep();
+      SoundService().playError();
       Toast.show(context, '❌ Error parsing barcode');
     }
+  }
+
+  void _showRackSelectionDialog({
+    required String cleanedBarcode,
+    required bp.BarcodeType type,
+    required String modelName,
+    required String colorName,
+    required String sizeCode,
+    required String cmtCode,
+    required int qty,
+    required String timestamp,
+  }) {
+    String? selectedRackId;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.purple.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.style, color: Colors.purple.shade700, size: 24),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pilih Rak',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      'Barcode Piece',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width - 80,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Product info
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$modelName - $colorName - $sizeCode',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Qty: $qty pcs',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  SizedBox(height: 16),
+                  
+                  Text(
+                    'Pilih Rak Penyimpanan:',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  
+                  SizedBox(height: 8),
+                  
+                  // Rack dropdown
+                  _isLoadingRacks
+                      ? Container(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              SizedBox(width: 12),
+                              Text('Memuat rak...'),
+                            ],
+                          ),
+                        )
+                      : _rackLoadError || _racks.isEmpty
+                          ? Container(
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.error_outline, color: Colors.red, size: 20),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Gagal memuat rak',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: () async {
+                                      await _loadRacks();
+                                      setDialogState(() {});
+                                    },
+                                    child: Text('Retry'),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : DropdownButtonFormField<String>(
+                              value: selectedRackId,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 12,
+                                ),
+                                isDense: true,
+                                hintText: 'Pilih rak...',
+                              ),
+                              items: _racks.map((rack) {
+                                return DropdownMenuItem<String>(
+                                  value: rack.id,
+                                  child: Text(
+                                    rack.displayName,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                setDialogState(() {
+                                  selectedRackId = value;
+                                });
+                              },
+                            ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                SoundService().playError();
+                Toast.show(context, '❌ Barcode dibatalkan');
+              },
+              child: Text('Batal', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: selectedRackId == null
+                  ? null
+                  : () {
+                      Navigator.pop(context);
+                      
+                      // Add barcode with selected rack
+                      final barcodeProduct = bp.BarcodeProduct(
+                        barcode: cleanedBarcode,
+                        type: type,
+                        model: modelName,
+                        warna: colorName,
+                        size: sizeCode,
+                        rak: cmtCode,
+                        rackId: selectedRackId,
+                        qty: qty,
+                        requestId: 'REQ-$cmtCode-$timestamp',
+                      ).markAsScanned();
+
+                      setState(() {
+                        _scannedBarcodes.insert(0, barcodeProduct);
+                      });
+
+                      SoundService().playSuccess();
+                      Toast.show(context, '✅ ${barcodeProduct.typeLabel} terscan');
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple.shade600,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text('Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _getModelName(String code) {
@@ -312,8 +578,30 @@ class _InboundScreenState extends State<InboundScreen> {
       return;
     }
 
-    if (_selectedWarehouseId == null) {
-      Toast.show(context, 'Pilih warehouse terlebih dahulu');
+    // Separate dozen and piece barcodes
+    final dozenBarcodes = _scannedBarcodes
+        .where((b) => b.type == bp.BarcodeType.lusin)
+        .map((b) => b.barcode)
+        .toList();
+    
+    final pieceBarcodes = _scannedBarcodes
+        .where((b) => b.type == bp.BarcodeType.satuan)
+        .map((b) => <String, String>{
+          'barcode': b.barcode,
+          'rack_id': b.rackId ?? '',
+        })
+        .toList();
+
+    // Check if dozen barcodes exist but no warehouse selected
+    if (dozenBarcodes.isNotEmpty && _selectedWarehouseId == null) {
+      Toast.show(context, 'Pilih warehouse terlebih dahulu untuk penerimaan dozen');
+      return;
+    }
+
+    // Check if piece barcodes exist but some don't have rack_id
+    final piecesWithoutRack = pieceBarcodes.where((p) => p['rack_id']?.isEmpty ?? true).length;
+    if (piecesWithoutRack > 0) {
+      Toast.show(context, '$piecesWithoutRack barcode piece belum memiliki rak yang dipilih');
       return;
     }
 
@@ -322,13 +610,11 @@ class _InboundScreenState extends State<InboundScreen> {
     });
 
     try {
-      // Extract raw barcodes
-      final barcodes = _scannedBarcodes.map((b) => b.barcode).toList();
-
-      // Call API
+      // Call API with new format
       final result = await InboundService.submitInbound(
-        barcodes: barcodes,
-        warehouseId: _selectedWarehouseId!,
+        barcodesDozens: dozenBarcodes.isNotEmpty ? dozenBarcodes : null,
+        barcodesPieces: pieceBarcodes.isNotEmpty ? pieceBarcodes : null,
+        warehouseId: dozenBarcodes.isNotEmpty ? _selectedWarehouseId : null,
         notes: _notesController.text.trim(),
       );
 
@@ -351,10 +637,12 @@ class _InboundScreenState extends State<InboundScreen> {
     }
   }
 
-  void _showSuccessDialog(Map<String, dynamic>? data, List<dynamic>? errors) {
+  void _showSuccessDialog(Map<String, dynamic>? data, dynamic errors) {
+    print('📋 Data received in dialog: $data');
     print('📋 Errors received in dialog: $errors');
-    final summary = data?['summary'];
-    final hasErrors = errors != null && errors.isNotEmpty;
+    
+    final totalScanned = data?['total_scanned'];
+    final hasErrors = errors != null && (errors is List ? errors.isNotEmpty : (errors is Map && errors.isNotEmpty));
 
     showDialog(
       context: context,
@@ -423,8 +711,8 @@ class _InboundScreenState extends State<InboundScreen> {
               
               SizedBox(height: 24),
               
-              // Summary cards
-              if (summary != null) ...[
+              // Summary cards - updated for new API format
+              if (totalScanned != null) ...[
                 Container(
                   padding: EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -435,27 +723,11 @@ class _InboundScreenState extends State<InboundScreen> {
                   child: Column(
                     children: [
                       _buildSummaryRow(
-                        'Total Scanned',
-                        '${summary['total_scanned']}',
-                        Icons.qr_code_scanner,
-                        Colors.blue,
-                      ),
-                      SizedBox(height: 12),
-                      _buildSummaryRow(
-                        'Processed',
-                        '${summary['total_processed']}',
+                        'Total Diproses',
+                        '$totalScanned',
                         Icons.check_circle_outline,
                         Colors.green,
                       ),
-                      if (summary['total_failed'] > 0) ...[
-                        SizedBox(height: 12),
-                        _buildSummaryRow(
-                          'Failed',
-                          '${summary['total_failed']}',
-                          Icons.error_outline,
-                          Colors.red,
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -640,6 +912,18 @@ class _InboundScreenState extends State<InboundScreen> {
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: Icon(Icons.history, color: Colors.white),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => InboundListScreen(),
+                ),
+              );
+            },
+            tooltip: 'Daftar Penerimaan',
+          ),
           if (_scannedBarcodes.isNotEmpty)
             IconButton(
               icon: Icon(Icons.delete_sweep, color: Colors.white),
@@ -979,6 +1263,18 @@ class _InboundScreenState extends State<InboundScreen> {
   }
 
   Widget _buildBarcodeCard(bp.BarcodeProduct barcode) {
+    // Get rack name if available for piece items
+    String? rackName;
+    if (barcode.type == bp.BarcodeType.satuan && barcode.rackId != null) {
+      final rack = _racks.firstWhere(
+        (r) => r.id == barcode.rackId,
+        orElse: () => Rack(id: '', code: '', name: 'Unknown', warehouseId: ''),
+      );
+      if (rack.id.isNotEmpty) {
+        rackName = rack.shortDisplayName;
+      }
+    }
+
     return Card(
       margin: EdgeInsets.only(bottom: 8),
       elevation: 1,
@@ -1009,9 +1305,27 @@ class _InboundScreenState extends State<InboundScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        subtitle: Text(
-          'Qty: ${barcode.qty} • ${barcode.typeLabel}',
-          style: TextStyle(fontSize: 12),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Qty: ${barcode.qty} • ${barcode.typeLabel}',
+              style: TextStyle(fontSize: 12),
+            ),
+            if (rackName != null) ...[
+              SizedBox(height: 2),
+              Row(
+                children: [
+                  Icon(Icons.inventory_2, size: 12, color: Colors.purple.shade600),
+                  SizedBox(width: 4),
+                  Text(
+                    rackName,
+                    style: TextStyle(fontSize: 11, color: Colors.purple.shade600),
+                  ),
+                ],
+              ),
+            ],
+          ],
         ),
         trailing: IconButton(
           icon: Icon(Icons.close, size: 20, color: Colors.red),

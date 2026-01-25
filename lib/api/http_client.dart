@@ -97,14 +97,15 @@ class ApiClient {
     }
   }
 
-  /// Set Authorization header global
+        return handler.next(error);
+      },
+    ));
+
   static void setToken(String token) {
     dio.options.headers['Authorization'] = 'Bearer $token';
   }
-
-  /// Clear auth & notify UI
-  static Future<void> _forceLogout() async {
-    await AppStorage.clear();
-    AuthEventBus.notifyTokenExpired();
+  
+  static void reset() {
+    dio.options.headers.remove("Authorization");
   }
 }
