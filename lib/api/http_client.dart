@@ -124,15 +124,12 @@ class ApiClient {
         return handler.next(error);
       },
     ));
-    }
-    return _dioInstance!;
-  }
 
   static void setToken(String token) {
     dio.options.headers["Authorization"] = "Bearer $token";
   }
   
   static void reset() {
-    _dioInstance = null;
+    dio.options.headers.remove("Authorization");
   }
 }
