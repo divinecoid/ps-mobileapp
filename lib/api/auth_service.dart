@@ -1,13 +1,14 @@
 import 'package:dio/dio.dart';
 import '../utils/secure_storage.dart';
 import 'http_client.dart';
+import 'endpoints.dart';
 
 class AuthService {
   /// LOGIN → Calls Laravel /login endpoint
   static Future<bool> login(String username, String password) async {
     try {
       final response = await ApiClient.dio.post(
-        '/auth/login',
+        Endpoint.login,
         data: {'username': username, 'password': password},
       );
 
@@ -35,7 +36,7 @@ class AuthService {
       if (refreshToken == null) return false;
 
       final response = await ApiClient.dio.post(
-        '/auth/refresh',
+        Endpoint.refresh,
         data: {'refresh_token': refreshToken},
       );
 
@@ -57,10 +58,10 @@ class AuthService {
     try {
       if (refreshToken != null) {
         final response = await ApiClient.dio.post(
-          '/auth/logout',
+          Endpoint.logout,
           data: {'refresh_token': refreshToken},
         );
-        
+
         // Check if API returned success: false (e.g., invalid refresh token)
         if (response.data['success'] == false) {
           print('⚠️ Logout failed: ${response.data['message']}');
