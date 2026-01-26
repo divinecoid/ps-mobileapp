@@ -1,19 +1,23 @@
 import 'package:dio/dio.dart';
 import '../utils/secure_storage.dart';
 import 'http_client.dart';
+import 'endpoints.dart';
 
 class AuthService {
   /// LOGIN → Calls Laravel /login endpoint
   static Future<bool> login(String username, String password) async {
     try {
       final response = await ApiClient.dio.post(
-        '/auth/login',
+        Endpoint.login,
         data: {'username': username, 'password': password},
       );
-
       // Extract tokens from backend response
       final accessToken = response.data['token'];
       final refreshToken = response.data['refresh_token'];
+
+      if (accessToken == null || refreshToken == null) {
+        return false;
+      }
 
       // Store tokens securely
       await AppStorage.setAccessToken(accessToken);
@@ -25,6 +29,8 @@ class AuthService {
       return true;
     } on DioException catch (e) {
       return false;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -35,7 +41,7 @@ class AuthService {
       if (refreshToken == null) return false;
 
       final response = await ApiClient.dio.post(
-        '/auth/refresh',
+        Endpoint.refresh,
         data: {'refresh_token': refreshToken},
       );
 
@@ -56,16 +62,25 @@ class AuthService {
     final refreshToken = await AppStorage.getRefreshToken();
     try {
       if (refreshToken != null) {
-        await ApiClient.dio.post(
-          '/auth/logout',
+        final response = await ApiClient.dio.post(
+          Endpoint.logout,
           data: {'refresh_token': refreshToken},
         );
+
+        // Check if API returned success: false (e.g., invalid refresh token)
+        if (response.data['success'] == false) {
+          // Still clear local tokens even if server rejects
+          await AppStorage.clear();
+          return false;
+        }
       }
 
       // Remove tokens locally
       await AppStorage.clear();
       return true;
     } catch (e) {
+      // Clear tokens anyway to force logout locally
+      await AppStorage.clear();
       return false;
     }
   }

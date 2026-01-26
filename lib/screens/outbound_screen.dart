@@ -6,6 +6,7 @@ import '../components/app_drawer.dart';
 import '../models/product.dart';
 import 'prepare_items_screen.dart';
 import '../utils/navigation_helper.dart';
+import '../api/outbound_service.dart';
 
 class OutboundScreen extends StatefulWidget {
   const OutboundScreen({super.key});
@@ -17,49 +18,13 @@ class OutboundScreen extends StatefulWidget {
 class _OutboundScreenState extends State<OutboundScreen> {
   // State management
   String? _scannedResiNumber;
-  bool _isScanningResi = false;
-  bool _isScanningProduct = false;
+  bool _isLoading = false;
   bool _isOrderTaken = false; // Track apakah order sudah diambil
   List<Product> _products = [];
   Set<String> _scannedProductSkus = {};
 
-  // Data dummy resi
-  final Map<String, dynamic> _dummyResiData = {
-    'resiNumber': 'YKART',
-    'marketplace': 'Shopee',
-    'kurir': 'J&T Express',
-    'penerima': 'Pembeli Shopee',
-    'noHp': '62812345678910',
-    'alamat': 'Jl. Bangka IV No.126 MAMPANG PRAPATAN, KOTA JAKARTA SELATAN, DKI JAKARTA',
-    'berat': '2100 gr',
-    'batasKirim': '31-12-2024',
-  };
-
-  // Data dummy produk
-  final List<Map<String, dynamic>> _dummyProducts = [
-    {
-      'sku': 'PL-MAR-XL',
-      'nama': 'POLO Maroon XL',
-      'qty': 3,
-      'lokasi': {
-        'lantai': '1',
-        'ruang': 'A',
-        'rak': '011',
-        'bin': '01',
-      },
-    },
-    {
-      'sku': 'TSH-BLK-M',
-      'nama': 'T-Shirt Hitam M',
-      'qty': 2,
-      'lokasi': {
-        'lantai': '1',
-        'ruang': 'C',
-        'rak': '031',
-        'bin': '03',
-      },
-    },
-  ];
+  // Order data from API
+  Map<String, dynamic>? _orderData;
 
   @override
   void initState() {
@@ -76,30 +41,91 @@ class _OutboundScreenState extends State<OutboundScreen> {
           scanType: ScanType.barcode,
           onScanResult: (barcode) {
             // Callback dipanggil saat barcode terdeteksi
-            // Dalam implementasi nyata, barcode akan digunakan untuk fetch data resi
           },
         ),
       ),
     );
 
-    // Set data resi setelah scan (menggunakan data dummy)
-    // Dalam implementasi nyata, result (barcode) akan digunakan untuk fetch data
-    // Untuk demo, selalu set data dummy meskipun result null
-    if (mounted) {
-      setState(() {
-        _scannedResiNumber = _dummyResiData['resiNumber'];
-        _products = _dummyProducts.map((p) => Product(
-          sku: p['sku'],
-          nama: p['nama'],
-          qty: p['qty'],
-          lokasi: p['lokasi'],
-          isScanned: false,
-        )).toList();
-        _isOrderTaken = false; // Reset state order taken
-      });
+    // Validate AWB with backend API
+    if (result != null && result.isNotEmpty && mounted) {
+      await _validateAwb(result);
+    }
+  }
 
+  Future<void> _validateAwb(String awbCode) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await OutboundService.validateAwb(awbCode);
+
+      if (!mounted) return;
+
+      if (response['success'] == true) {
+        final orderData = response['data']['order'];
+
+        setState(() {
+          _orderData = orderData;
+          _scannedResiNumber = orderData['awb_code'];
+          _isOrderTaken = false;
+        });
+
+        // Fetch order items
+        await _fetchOrderItems(orderData['id']);
+
+        if (mounted) {
+          Toast.show(context, 'Resi berhasil di-scan');
+        }
+      } else {
+        if (mounted) {
+          Toast.show(context, response['message'] ?? 'AWB tidak valid');
+        }
+      }
+    } catch (e) {
       if (mounted) {
-        Toast.show(context, 'Resi berhasil di-scan');
+        Toast.show(context, 'Error: Gagal memvalidasi AWB');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _fetchOrderItems(String orderId) async {
+    try {
+      final response = await OutboundService.getOrderItems(orderId);
+
+      if (!mounted) return;
+
+      if (response['success'] == true) {
+        final items = response['data']['items'] as List;
+
+        setState(() {
+          _products = items
+              .map(
+                (item) => Product(
+                  sku: item['sku'] ?? '',
+                  nama: item['item_name'] ?? '',
+                  qty: item['item_index'] ?? 1,
+                  lokasi: {
+                    'lantai': '1',
+                    'ruang': 'A',
+                    'rak': '001',
+                    'bin': '01',
+                  },
+                  isScanned: false,
+                ),
+              )
+              .toList();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        Toast.show(context, 'Error: Gagal mengambil data item');
       }
     }
   }
@@ -108,7 +134,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
     if (productIndex >= _products.length) return;
 
     final product = _products[productIndex];
-    
+
     final result = await Navigator.push<String>(
       context,
       MaterialPageRoute(
@@ -181,9 +207,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
             Container(
@@ -198,10 +222,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
             SizedBox(width: 12),
             Text(
               'Berhasil!',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -248,6 +269,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   _products = [];
                   _scannedProductSkus = {};
                   _isOrderTaken = false;
+                  _orderData = null;
                 });
               },
               style: ElevatedButton.styleFrom(
@@ -278,7 +300,11 @@ class _OutboundScreenState extends State<OutboundScreen> {
   }
 
   void _handleMenuSelection(String menu) {
-    NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'outbound');
+    NavigationHelper.handleMenuSelection(
+      context,
+      menu,
+      currentScreen: 'outbound',
+    );
   }
 
   @override
@@ -294,24 +320,21 @@ class _OutboundScreenState extends State<OutboundScreen> {
         ),
         title: Text(
           'PREPARIST APP',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
       ),
-      drawer: AppDrawer(
-        onMenuSelected: _handleMenuSelection,
-      ),
+      drawer: AppDrawer(onMenuSelected: _handleMenuSelection),
       body: SafeArea(
         bottom: true,
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 24),
-          child: _scannedResiNumber == null
-              ? _buildScanResiView()
-              : _buildResiDataView(),
-        ),
+        child: _isLoading
+            ? Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 24),
+                child: _scannedResiNumber == null
+                    ? _buildScanResiView()
+                    : _buildResiDataView(),
+              ),
       ),
     );
   }
@@ -459,6 +482,8 @@ class _OutboundScreenState extends State<OutboundScreen> {
   }
 
   Widget _buildResiDataView() {
+    if (_orderData == null) return SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -476,11 +501,13 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   children: [
                     Icon(Icons.receipt_long, color: Colors.green, size: 28),
                     SizedBox(width: 12),
-                    Text(
-                      'Data Resi: ${_dummyResiData['resiNumber']}',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Text(
+                        'Data Resi: ${_orderData!['awb_code'] ?? ''}',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
@@ -494,13 +521,38 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   ),
                   child: Column(
                     children: [
-                      _buildResiDetailRow('Marketplace', _dummyResiData['marketplace']),
-                      _buildResiDetailRow('Kurir', _dummyResiData['kurir']),
-                      _buildResiDetailRow('Penerima', _dummyResiData['penerima']),
-                      _buildResiDetailRow('No. HP', _dummyResiData['noHp']),
-                      _buildResiDetailRow('Alamat', _dummyResiData['alamat']),
-                      _buildResiDetailRow('Berat', _dummyResiData['berat']),
-                      _buildResiDetailRow('Batas Kirim', _dummyResiData['batasKirim']),
+                      _buildResiDetailRow(
+                        'Order SN',
+                        _orderData!['order_sn'] ?? '-',
+                      ),
+                      _buildResiDetailRow(
+                        'Marketplace',
+                        _orderData!['marketplace']?['name'] ?? '-',
+                      ),
+                      _buildResiDetailRow(
+                        'Online Store',
+                        _orderData!['online_store']?['name'] ?? '-',
+                      ),
+                      _buildResiDetailRow(
+                        'Penerima',
+                        _orderData!['customer_name'] ?? '-',
+                      ),
+                      _buildResiDetailRow(
+                        'No. HP',
+                        _orderData!['customer_phone'] ?? '-',
+                      ),
+                      _buildResiDetailRow(
+                        'Alamat',
+                        _orderData!['customer_address'] ?? '-',
+                      ),
+                      _buildResiDetailRow(
+                        'Berat',
+                        '${_orderData!['total_weight'] ?? 0} gr',
+                      ),
+                      _buildResiDetailRow(
+                        'Total Item',
+                        '${_orderData!['item_count'] ?? 0}',
+                      ),
                     ],
                   ),
                 ),
@@ -509,7 +561,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
           ),
         ),
         SizedBox(height: 16),
-        // Card: Batas Kirim
+        // Card: Status
         Container(
           padding: EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -518,10 +570,10 @@ class _OutboundScreenState extends State<OutboundScreen> {
           ),
           child: Row(
             children: [
-              Icon(Icons.calendar_today, color: Colors.green, size: 20),
+              Icon(Icons.check_circle, color: Colors.green, size: 20),
               SizedBox(width: 12),
               Text(
-                'Batas Kirim: ${_dummyResiData['batasKirim']}',
+                'Status: ${_orderData!['status'] ?? '-'}',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -644,7 +696,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Siap kirim resi ${_dummyResiData['resiNumber']}',
+                          'Siap kirim resi ${_orderData?['awb_code'] ?? ''}',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -683,7 +735,9 @@ class _OutboundScreenState extends State<OutboundScreen> {
             ),
           ),
         ],
-        SizedBox(height: 16), // Extra spacing at bottom to prevent overlap with system navigation bar
+        SizedBox(
+          height: 16,
+        ), // Extra spacing at bottom to prevent overlap with system navigation bar
       ],
     );
   }
@@ -698,19 +752,13 @@ class _OutboundScreenState extends State<OutboundScreen> {
             width: 100,
             child: Text(
               '$label:',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[700],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[700]),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -727,9 +775,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.grey.shade300,
-        ),
+        border: Border.all(color: Colors.grey.shade300),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -768,10 +814,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                     SizedBox(height: 4),
                     Text(
                       'SKU: ${product.sku} | Qty: ${product.qty}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[700],
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                     ),
                   ],
                 ),
@@ -783,4 +826,3 @@ class _OutboundScreenState extends State<OutboundScreen> {
     );
   }
 }
-

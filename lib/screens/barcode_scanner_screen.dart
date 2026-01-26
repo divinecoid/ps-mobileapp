@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../utils/sound_service.dart';
 
 enum ScanType {
   barcode,
@@ -11,6 +12,7 @@ class BarcodeScannerScreen extends StatefulWidget {
   final String instruction;
   final ScanType scanType;
   final Function(String) onScanResult;
+  final List<String>? scannedBarcodes; // List of already scanned barcodes
 
   const BarcodeScannerScreen({
     super.key,
@@ -18,6 +20,7 @@ class BarcodeScannerScreen extends StatefulWidget {
     required this.instruction,
     required this.scanType,
     required this.onScanResult,
+    this.scannedBarcodes, // Optional parameter
   });
 
   @override
@@ -116,9 +119,31 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           return; // Skip jika terlalu pendek
         }
         
+        // Check if barcode was scanned before
+        if (widget.scannedBarcodes != null && widget.scannedBarcodes!.contains(bestCode)) {
+          print('⚠️ Duplicate barcode detected: $bestCode');
+          // Play error beep for duplicate scan
+          SoundService().playError();
+          
+          // Show error feedback to user
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('⚠️ Barcode sudah pernah di-scan'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+          return; // Don't process duplicate
+        }
+        
         setState(() {
           isScanning = false;
         });
+
+        // Play success beep for new scan
+        SoundService().playSuccess();
 
         // Vibrate feedback
         // HapticFeedback.lightImpact();
