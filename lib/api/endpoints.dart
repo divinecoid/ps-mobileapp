@@ -29,4 +29,7 @@ class Endpoint {
   // OUTBOUND
   static const outboundValidateAwb = '/outbound/validate-awb';
   static const outboundOrderItems = '/outbound/order-items';
+  static const outboundValidateProductBarcode =
+      '/outbound/validate-product-barcode';
+  static const outboundSubmitPreparation = '/outbound/submit-preparation';
 }

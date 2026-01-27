@@ -51,4 +51,56 @@ class OrderService {
       rethrow;
     }
   }
+
+  /// POST /outbound/validate-product-barcode → Validate product barcode
+  static Future<Map<String, dynamic>> validateProductBarcode(
+    String barcode,
+  ) async {
+    try {
+      final response = await ApiClient.dio.post(
+        Endpoint.outboundValidateProductBarcode,
+        data: {'barcode': barcode},
+      );
+
+      if (response.data is Map) {
+        return Map<String, dynamic>.from(response.data);
+      } else {
+        throw Exception('Invalid response format');
+      }
+    } on DioException catch (e) {
+      if (e.response != null) {
+        return Map<String, dynamic>.from(e.response!.data);
+      }
+      rethrow;
+    }
+  }
+
+  /// POST /outbound/submit-preparation → Submit order preparation
+  static Future<Map<String, dynamic>> submitPreparation({
+    required String orderId,
+    required String preparedAt,
+    required List<String> scannedBarcodes,
+  }) async {
+    try {
+      final response = await ApiClient.dio.post(
+        Endpoint.outboundSubmitPreparation,
+        data: {
+          'order_id': orderId,
+          'prepared_at': preparedAt,
+          'scanned_barcodes': scannedBarcodes,
+        },
+      );
+
+      if (response.data is Map) {
+        return Map<String, dynamic>.from(response.data);
+      } else {
+        throw Exception('Invalid response format');
+      }
+    } on DioException catch (e) {
+      if (e.response != null) {
+        return Map<String, dynamic>.from(e.response!.data);
+      }
+      rethrow;
+    }
+  }
 }

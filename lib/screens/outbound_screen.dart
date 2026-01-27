@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'barcode_scanner_screen.dart';
-import '../components/loading.dart';
 import '../components/toast.dart';
 import '../components/app_drawer.dart';
 import '../models/product.dart';
-import 'prepare_items_screen.dart';
-import '../utils/navigation_helper.dart';
+import '../models/grouped_product_item.dart';
 import '../api/outbound_service.dart';
+import '../api/order_service.dart';
+import '../utils/navigation_helper.dart';
+import 'scan_product_group_screen.dart';
 
 class OutboundScreen extends StatefulWidget {
   const OutboundScreen({super.key});
@@ -19,12 +20,17 @@ class _OutboundScreenState extends State<OutboundScreen> {
   // State management
   String? _scannedResiNumber;
   bool _isLoading = false;
-  bool _isOrderTaken = false; // Track apakah order sudah diambil
   List<Product> _products = [];
   Set<String> _scannedProductSkus = {};
 
   // Order data from API
   Map<String, dynamic>? _orderData;
+
+  // Temporary prepared_at variable (set on AWB scan, cleared on cancel)
+  String? _preparedAt;
+
+  // Grouped products by SKU-Color-Size
+  List<GroupedProductItem> _groupedProducts = [];
 
   @override
   void initState() {
@@ -32,27 +38,37 @@ class _OutboundScreenState extends State<OutboundScreen> {
   }
 
   Future<void> _startScanResi() async {
-    final result = await Navigator.push<String>(
+    // Variable to hold the scanner's toast callback
+    Function(String, {bool isError})? showScannerToast;
+
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => BarcodeScannerScreen(
           title: 'Scan Resi',
           instruction: 'Arahkan kamera ke barcode resi marketplace',
           scanType: ScanType.barcode,
-          onScanResult: (barcode) {
-            // Callback dipanggil saat barcode terdeteksi
+          onError: (showToast) {
+            // Capture the callback from the scanner
+            showScannerToast = showToast;
+          },
+          onScanResult: (barcode) async {
+            // Validate AWB immediately when scanned, passing the toast callback
+            await _validateAwb(barcode, showScannerToast);
+            // Close scanner after successful scan
+            if (mounted && _scannedResiNumber != null) {
+              Navigator.of(context).pop();
+            }
           },
         ),
       ),
     );
-
-    // Validate AWB with backend API
-    if (result != null && result.isNotEmpty && mounted) {
-      await _validateAwb(result);
-    }
   }
 
-  Future<void> _validateAwb(String awbCode) async {
+  Future<void> _validateAwb(
+    String awbCode, [
+    Function(String, {bool isError})? showScannerToast,
+  ]) async {
     setState(() {
       _isLoading = true;
     });
@@ -65,26 +81,64 @@ class _OutboundScreenState extends State<OutboundScreen> {
       if (response['success'] == true) {
         final orderData = response['data']['order'];
 
+        // Check if order is already prepared
+        if (orderData['readytoship_at'] != null) {
+          if (mounted) {
+            if (showScannerToast != null) {
+              showScannerToast(
+                'Resi ini sudah disiapkan sebelumnya',
+                isError: true,
+              );
+            } else {
+              Toast.show(
+                context,
+                'Resi ini sudah disiapkan sebelumnya',
+                isError: true,
+              );
+            }
+          }
+          return;
+        }
+
+        // Set temporary prepared_at variable in UTC
+        final preparedAt = DateTime.now().toUtc().toIso8601String();
+
         setState(() {
           _orderData = orderData;
           _scannedResiNumber = orderData['awb_code'];
-          _isOrderTaken = false;
+          _preparedAt = preparedAt; // Store temporary prepared_at in UTC
         });
 
         // Fetch order items
         await _fetchOrderItems(orderData['id']);
 
         if (mounted) {
+          // Success message doesn't need to be blocking/top-priority toast if navigating away
           Toast.show(context, 'Resi berhasil di-scan');
         }
       } else {
         if (mounted) {
-          Toast.show(context, response['message'] ?? 'AWB tidak valid');
+          if (showScannerToast != null) {
+            showScannerToast(
+              response['message'] ?? 'AWB tidak valid',
+              isError: true,
+            );
+          } else {
+            Toast.show(
+              context,
+              response['message'] ?? 'AWB tidak valid',
+              isError: true,
+            );
+          }
         }
       }
     } catch (e) {
       if (mounted) {
-        Toast.show(context, 'Error: Gagal memvalidasi AWB');
+        if (showScannerToast != null) {
+          showScannerToast('Error: Gagal memvalidasi AWB', isError: true);
+        } else {
+          Toast.show(context, 'Error: Gagal memvalidasi AWB', isError: true);
+        }
       }
     } finally {
       if (mounted) {
@@ -104,7 +158,49 @@ class _OutboundScreenState extends State<OutboundScreen> {
       if (response['success'] == true) {
         final items = response['data']['items'] as List;
 
+        // Group items by SKU-Color-Size
+        final Map<String, GroupedProductItem> groupedMap = {};
+
+        for (var item in items) {
+          // Normalize values - handle null and empty strings
+          final sku = (item['sku'] ?? '').toString().trim();
+          final color = (item['color'] ?? '').toString().trim();
+          final size = (item['size'] ?? '').toString().trim();
+
+          // Create unique key for grouping
+          final key = '$sku|$color|$size';
+
+          // Create display name
+          final displayName = [
+            sku,
+            color,
+            size,
+          ].where((s) => s.isNotEmpty).join(' - ');
+
+          if (groupedMap.containsKey(key)) {
+            // Increment quantity for existing group
+            final existing = groupedMap[key]!;
+            groupedMap[key] = existing.copyWith(
+              requiredQuantity: existing.requiredQuantity + 1,
+            );
+          } else {
+            // Create new group
+            groupedMap[key] = GroupedProductItem(
+              sku: sku,
+              color: color,
+              size: size,
+              displayName: displayName.isNotEmpty
+                  ? displayName
+                  : 'Unknown Item',
+              requiredQuantity: 1,
+              scannedBarcodes: [],
+              isComplete: false,
+            );
+          }
+        }
+
         setState(() {
+          _groupedProducts = groupedMap.values.toList();
           _products = items
               .map(
                 (item) => Product(
@@ -125,7 +221,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
       }
     } catch (e) {
       if (mounted) {
-        Toast.show(context, 'Error: Gagal mengambil data item');
+        Toast.show(context, 'Error: Gagal mengambil data item', isError: true);
       }
     }
   }
@@ -170,36 +266,63 @@ class _OutboundScreenState extends State<OutboundScreen> {
     }
   }
 
-  void _takeOrder() {
-    setState(() {
-      _isOrderTaken = true;
-    });
-    if (mounted) {
-      Toast.show(context, 'Order berhasil diambil');
-    }
-  }
-
-  void _markProductReady(int productIndex) {
-    setState(() {
-      _products[productIndex] = Product(
-        sku: _products[productIndex].sku,
-        nama: _products[productIndex].nama,
-        qty: _products[productIndex].qty,
-        lokasi: _products[productIndex].lokasi,
-        isScanned: _products[productIndex].isScanned,
-        isReady: true,
+  Future<void> _markResiReady() async {
+    // Check if all groups are complete
+    final allGroupsComplete = _groupedProducts.every((g) => g.isComplete);
+    if (!allGroupsComplete) {
+      Toast.show(
+        context,
+        'Semua grup produk harus selesai di-scan terlebih dahulu',
+        isError: true,
       );
-    });
-  }
-
-  void _markResiReady() {
-    final allProductsReady = _products.every((p) => p.isReady);
-    if (!allProductsReady) {
-      Toast.show(context, 'Semua produk harus siap terlebih dahulu');
       return;
     }
 
-    _showSuccessDialog();
+    // Collect all scanned barcodes
+    final List<String> allScannedBarcodes = [];
+    for (var group in _groupedProducts) {
+      allScannedBarcodes.addAll(group.scannedBarcodes);
+    }
+
+    if (_orderData == null || _preparedAt == null) {
+      Toast.show(context, 'Data order tidak lengkap', isError: true);
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Submit preparation to backend
+      final response = await OrderService.submitPreparation(
+        orderId: _orderData!['id'],
+        preparedAt: _preparedAt!,
+        scannedBarcodes: allScannedBarcodes,
+      );
+
+      if (!mounted) return;
+
+      if (response['success'] == true) {
+        _showSuccessDialog();
+      } else {
+        Toast.show(
+          context,
+          response['message'] ?? 'Gagal submit preparation',
+          isError: true,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Toast.show(context, 'Error: Gagal submit preparation', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _showSuccessDialog() {
@@ -268,8 +391,9 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   _scannedResiNumber = null;
                   _products = [];
                   _scannedProductSkus = {};
-                  _isOrderTaken = false;
                   _orderData = null;
+                  _preparedAt = null; // Clear temporary prepared_at
+                  _groupedProducts = [];
                 });
               },
               style: ElevatedButton.styleFrom(
@@ -286,6 +410,109 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCancelConfirmation() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.orange,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.warning, color: Colors.white),
+            ),
+            SizedBox(width: 12),
+            Text(
+              'Batalkan Order?',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Apakah Anda yakin ingin membatalkan proses persiapan order ini?',
+              style: TextStyle(fontSize: 16),
+            ),
+            SizedBox(height: 12),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Semua data scan akan hilang',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.orange.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Tidak',
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Reset state
+              setState(() {
+                _scannedResiNumber = null;
+                _products = [];
+                _scannedProductSkus = {};
+                _orderData = null;
+                _preparedAt = null; // Clear temporary prepared_at
+                _groupedProducts = [];
+              });
+              Toast.show(context, 'Order dibatalkan');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'Ya, Batalkan',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ),
@@ -584,7 +811,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
           ),
         ),
         SizedBox(height: 16),
-        // Card: Daftar Produk
+        // Card: Daftar Produk (Grouped by Variant)
         Card(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -599,7 +826,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                     Icon(Icons.inventory_2, color: Colors.green, size: 28),
                     SizedBox(width: 12),
                     Text(
-                      'Daftar Produk (${_products.length} item)',
+                      'Daftar Produk (${_groupedProducts.length} variant)',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -608,133 +835,52 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   ],
                 ),
                 SizedBox(height: 16),
-                ...List.generate(_products.length, (index) {
-                  return _buildProductCard(index);
+                ...List.generate(_groupedProducts.length, (index) {
+                  return _buildGroupedProductCard(index);
                 }),
               ],
             ),
           ),
         ),
         SizedBox(height: 16),
-        // Tombol Ambil Order (muncul pertama kali setelah scan)
-        if (!_isOrderTaken) ...[
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _takeOrder,
-              icon: Icon(Icons.shopping_cart),
-              label: Text('AMBIL ORDER'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue.shade700,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+        // Tombol RESI SIAP dan BATALKAN
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: ElevatedButton.icon(
+                onPressed: _markResiReady,
+                icon: Icon(Icons.check_circle),
+                label: Text('RESI SIAP'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
-        // Tombol Siapkan Barang dan Card Status Resi (muncul setelah ambil order)
-        if (_isOrderTaken) ...[
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => PrepareItemsScreen(
-                      products: _products,
-                      onProductScanned: (index, product) {
-                        setState(() {
-                          _products[index] = product;
-                        });
-                      },
-                      onProductReady: (index) {
-                        setState(() {
-                          _products[index] = Product(
-                            sku: _products[index].sku,
-                            nama: _products[index].nama,
-                            qty: _products[index].qty,
-                            lokasi: _products[index].lokasi,
-                            isScanned: _products[index].isScanned,
-                            isReady: true,
-                          );
-                        });
-                      },
-                    ),
+            SizedBox(width: 12),
+            Expanded(
+              flex: 1,
+              child: OutlinedButton.icon(
+                onPressed: _showCancelConfirmation,
+                icon: Icon(Icons.cancel, size: 20),
+                label: Text('BATAL'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: BorderSide(color: Colors.red, width: 2),
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                );
-              },
-              icon: Icon(Icons.inventory_2),
-              label: Text('Siapkan Barang'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
             ),
-          ),
-          SizedBox(height: 16),
-          // Card: Status Resi
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Icon(Icons.local_shipping, color: Colors.green, size: 32),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Siap kirim resi ${_orderData?['awb_code'] ?? ''}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          '${_products.where((p) => p.isReady).length}/${_products.length} produk prepared',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  ElevatedButton.icon(
-                    onPressed: _markResiReady,
-                    icon: Icon(Icons.send),
-                    label: Text('RESI SIAP'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
         SizedBox(
           height: 16,
         ), // Extra spacing at bottom to prevent overlap with system navigation bar
@@ -766,62 +912,127 @@ class _OutboundScreenState extends State<OutboundScreen> {
     );
   }
 
-  Widget _buildProductCard(int index) {
-    final product = _products[index];
+  Widget _buildGroupedProductCard(int index) {
+    final group = _groupedProducts[index];
 
-    return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: Colors.grey,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    '${index + 1}',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
+    return GestureDetector(
+      onTap: () async {
+        // Navigate to scan screen for editing
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ScanProductGroupScreen(
+              productGroup: group,
+              onGroupComplete: (completedGroup) {
+                setState(() {
+                  _groupedProducts[index] = completedGroup;
+                });
+              },
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: EdgeInsets.only(bottom: 12),
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: group.isComplete ? Colors.green : Colors.grey.shade300,
+            width: group.isComplete ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: group.isComplete
+                        ? Colors.green.shade100
+                        : Colors.grey.shade100,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Icon(
+                      group.isComplete ? Icons.check_circle : Icons.inventory_2,
+                      color: group.isComplete ? Colors.green : Colors.grey,
+                      size: 24,
                     ),
                   ),
                 ),
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      product.nama,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        group.displayName,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'SKU: ${product.sku} | Qty: ${product.qty}',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-                    ),
-                  ],
+                      SizedBox(height: 4),
+                      Text(
+                        'Qty: ${group.scannedCount} / ${group.requiredQuantity}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: group.isComplete
+                              ? Colors.green
+                              : Colors.grey[700],
+                          fontWeight: group.isComplete
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+                SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ScanProductGroupScreen(
+                          productGroup: group,
+                          onGroupComplete: (completedGroup) {
+                            setState(() {
+                              _groupedProducts[index] = completedGroup;
+                            });
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                  icon: Icon(
+                    group.isComplete ? Icons.edit : Icons.qr_code_scanner,
+                    size: 18,
+                  ),
+                  label: Text(
+                    group.isComplete ? 'EDIT' : 'SCAN',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: group.isComplete
+                        ? Colors.orange
+                        : Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

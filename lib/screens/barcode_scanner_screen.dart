@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../utils/sound_service.dart';
 
-enum ScanType {
-  barcode,
-  qrCode,
-}
+enum ScanType { barcode, qrCode }
 
 class BarcodeScannerScreen extends StatefulWidget {
   final String title;
@@ -13,6 +10,10 @@ class BarcodeScannerScreen extends StatefulWidget {
   final ScanType scanType;
   final Function(String) onScanResult;
   final List<String>? scannedBarcodes; // List of already scanned barcodes
+  final String Function()?
+  onInstructionUpdate; // Callback to get updated instruction
+  final Function(Function(String, {bool isError}))?
+  onError; // Callback to expose toast method
 
   const BarcodeScannerScreen({
     super.key,
@@ -21,6 +22,8 @@ class BarcodeScannerScreen extends StatefulWidget {
     required this.scanType,
     required this.onScanResult,
     this.scannedBarcodes, // Optional parameter
+    this.onInstructionUpdate, // Optional callback
+    this.onError, // Optional error callback
   });
 
   @override
@@ -32,27 +35,39 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   bool isScanning = true;
   bool _isInitialized = false;
   String? _errorMessage;
+  String? _toastMessage; // Custom toast message
+  bool _isToastError = false; // Track if toast is error type
+  String _currentInstruction; // For real-time counter update
+
+  _BarcodeScannerScreenState() : _currentInstruction = '';
 
   @override
   void initState() {
     super.initState();
-      // Konfigurasi khusus untuk QR code (mobile-friendly)
-      controller = MobileScannerController(
-        cameraResolution: const Size(1920, 1080), // High resolution untuk QR code yang jelas
-        detectionSpeed: DetectionSpeed.normal,
-        facing: CameraFacing.back,
-        torchEnabled: false,
-        autoStart: false,
-        formats: widget.scanType == ScanType.qrCode
-            ? const [
-                BarcodeFormat.qrCode, // Khusus QR code untuk mobile
-              ]
-            : const [
-                BarcodeFormat.code128,
-                BarcodeFormat.pdf417,
-              ],
-      );
-    
+    _currentInstruction = widget.instruction;
+
+    // Expose _showToast method to parent via onError callback
+    if (widget.onError != null) {
+      widget.onError!(_showToast);
+    }
+
+    // Konfigurasi khusus untuk QR code (mobile-friendly)
+    controller = MobileScannerController(
+      cameraResolution: const Size(
+        1920,
+        1080,
+      ), // High resolution untuk QR code yang jelas
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+      torchEnabled: false,
+      autoStart: false,
+      formats: widget.scanType == ScanType.qrCode
+          ? const [
+              BarcodeFormat.qrCode, // Khusus QR code untuk mobile
+            ]
+          : const [BarcodeFormat.code128, BarcodeFormat.pdf417],
+    );
+
     // Start scanner setelah widget siap
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startScanner();
@@ -72,7 +87,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
       print('Error starting scanner: $e');
       if (mounted) {
         setState(() {
-          _errorMessage = 'Tidak dapat mengakses kamera. Pastikan izin kamera sudah diberikan.';
+          _errorMessage =
+              'Tidak dapat mengakses kamera. Pastikan izin kamera sudah diberikan.';
           _isInitialized = false;
         });
       }
@@ -86,7 +102,32 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     super.dispose();
   }
 
-  void _onDetect(BarcodeCapture capture) {
+  void _showToast(String message, {bool isError = false}) {
+    setState(() {
+      _toastMessage = message;
+      _isToastError = isError;
+    });
+
+    // Auto-hide toast after 2 seconds
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _toastMessage = null;
+          _isToastError = false;
+        });
+      }
+    });
+  }
+
+  void updateInstruction(String newInstruction) {
+    if (mounted) {
+      setState(() {
+        _currentInstruction = newInstruction;
+      });
+    }
+  }
+
+  void _onDetect(BarcodeCapture capture) async {
     if (!isScanning) return;
 
     final List<Barcode> barcodes = capture.barcodes;
@@ -94,7 +135,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
       // Coba semua barcode yang terdeteksi, ambil yang paling panjang/valid
       Barcode? bestBarcode;
       String? bestCode;
-      
+
       for (final barcode in barcodes) {
         final code = barcode.rawValue;
         if (code != null && code.isNotEmpty) {
@@ -112,32 +153,28 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         print('Barcode length: ${bestCode.length}');
         print('Barcode type: ${bestBarcode.type}');
         print('Barcode format: ${bestBarcode.format}');
-        
+
         // Validasi minimal panjang untuk barcode kita (LPK-MERAH-L-RAK01-001-PCS = ~30 chars)
         if (bestCode.length < 10) {
-          print('Barcode terlalu pendek, mungkin tidak valid. Panjang: ${bestCode.length}');
+          print(
+            'Barcode terlalu pendek, mungkin tidak valid. Panjang: ${bestCode.length}',
+          );
           return; // Skip jika terlalu pendek
         }
-        
+
         // Check if barcode was scanned before
-        if (widget.scannedBarcodes != null && widget.scannedBarcodes!.contains(bestCode)) {
+        if (widget.scannedBarcodes != null &&
+            widget.scannedBarcodes!.contains(bestCode)) {
           print('⚠️ Duplicate barcode detected: $bestCode');
           // Play error beep for duplicate scan
           SoundService().playError();
-          
-          // Show error feedback to user
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('⚠️ Barcode sudah pernah di-scan'),
-                backgroundColor: Colors.orange,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
+
+          // Show error toast
+          _showToast('⚠️ Barcode sudah pernah di-scan', isError: true);
           return; // Don't process duplicate
         }
-        
+
+        // Temporarily pause scanning to prevent multiple detections
         setState(() {
           isScanning = false;
         });
@@ -145,12 +182,30 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         // Play success beep for new scan
         SoundService().playSuccess();
 
-        // Vibrate feedback
-        // HapticFeedback.lightImpact();
+        // Removed default success toast to allow custom handling by parent
+        // _showToast('✓ Barcode berhasil di-scan');
 
-        // Show result and return
-        widget.onScanResult(bestCode);
-        Navigator.pop(context, bestCode);
+        // Call the callback to process barcode (async, may take time)
+        await widget.onScanResult(bestCode);
+
+        // Update instruction AFTER callback completes (state is now updated)
+        if (widget.onInstructionUpdate != null) {
+          final newInstruction = widget.onInstructionUpdate!();
+          if (mounted) {
+            setState(() {
+              _currentInstruction = newInstruction;
+            });
+          }
+        }
+
+        // Resume scanning after a short delay for continuous scanning
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) {
+            setState(() {
+              isScanning = true;
+            });
+          }
+        });
       } else {
         print('Barcode detected but code is null or empty');
       }
@@ -262,19 +317,14 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               children: [
                 // Scanner
                 _isInitialized
-                    ? MobileScanner(
-                        controller: controller,
-                        onDetect: _onDetect,
-                      )
+                    ? MobileScanner(controller: controller, onDetect: _onDetect)
                     : Container(
                         color: Colors.black,
                         child: const Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              CircularProgressIndicator(
-                                color: Colors.white,
-                              ),
+                              CircularProgressIndicator(color: Colors.white),
                               SizedBox(height: 16),
                               Text(
                                 'Memuat kamera...',
@@ -291,261 +341,345 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                 // Overlay dengan instruksi (hanya tampil jika sudah initialized)
                 if (_isInitialized)
                   Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withOpacity(0.3),
-                  Colors.transparent,
-                  Colors.transparent,
-                  Colors.black.withOpacity(0.3),
-                ],
-                stops: const [0.0, 0.3, 0.7, 1.0],
-              ),
-            ),
-            child: Column(
-              children: [
-                // Top instruction
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          widget.scanType == ScanType.barcode
-                              ? Icons.qr_code_scanner
-                              : Icons.qr_code_2,
-                          color: Colors.white,
-                          size: 40, // Lebih besar untuk mobile
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          widget.instruction,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 17, // Sedikit lebih besar untuk mobile
-                            fontWeight: FontWeight.w600,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        if (widget.scanType == ScanType.qrCode) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Pastikan QR code berada dalam kotak',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.3),
+                          Colors.transparent,
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.3),
                         ],
-                      ],
-                    ),
-                  ),
-                ),
-
-                const Spacer(),
-
-                // Center scanning area - Square untuk QR code (mobile-friendly)
-                Container(
-                  width: widget.scanType == ScanType.qrCode 
-                      ? MediaQuery.of(context).size.width * 0.75  // Square untuk QR code
-                      : MediaQuery.of(context).size.width * 0.9,
-                  height: widget.scanType == ScanType.qrCode 
-                      ? MediaQuery.of(context).size.width * 0.75  // Square untuk QR code
-                      : 150,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: Colors.white,
-                      width: 3, // Lebih tebal untuk visibility
-                    ),
-                    borderRadius: BorderRadius.circular(16), // Lebih rounded untuk mobile
-                  ),
-                  child: Stack(
-                    children: [
-                      // Corner indicators
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: Colors.white, width: 3),
-                              left: BorderSide(color: Colors.white, width: 3),
-                            ),
-                          ),
-                        ),
+                        stops: const [0.0, 0.3, 0.7, 1.0],
                       ),
-                      Positioned(
-                        top: 0,
-                        right: 0,
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: Colors.white, width: 3),
-                              right: BorderSide(color: Colors.white, width: 3),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        left: 0,
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(color: Colors.white, width: 3),
-                              left: BorderSide(color: Colors.white, width: 3),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(color: Colors.white, width: 3),
-                              right: BorderSide(color: Colors.white, width: 3),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Scan type indicator
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: widget.scanType == ScanType.qrCode
-                        ? const Color(0xFF3B82F6).withOpacity(0.2)
-                        : const Color(0xFF10B981).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: widget.scanType == ScanType.qrCode
-                          ? const Color(0xFF3B82F6)
-                          : const Color(0xFF10B981),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        widget.scanType == ScanType.qrCode
-                            ? Icons.qr_code
-                            : Icons.qr_code_scanner,
-                        color: widget.scanType == ScanType.qrCode
-                            ? const Color(0xFF3B82F6)
-                            : const Color(0xFF10B981),
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        widget.scanType == ScanType.qrCode
-                            ? 'QR CODE SCANNER'
-                            : 'BARCODE SCANNER',
-                        style: TextStyle(
-                          color: widget.scanType == ScanType.qrCode
-                              ? const Color(0xFF3B82F6)
-                              : const Color(0xFF10B981),
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const Spacer(),
-
-                // Bottom instruction
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
                       children: [
-                        const Icon(
-                          Icons.info_outline,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          widget.scanType == ScanType.barcode
-                              ? 'Arahkan kamera ke barcode produk'
-                              : 'Arahkan kamera ke QR code',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
+                        // Top instruction
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.7),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  widget.scanType == ScanType.barcode
+                                      ? Icons.qr_code_scanner
+                                      : Icons.qr_code_2,
+                                  color: Colors.white,
+                                  size: 40, // Lebih besar untuk mobile
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  _currentInstruction,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize:
+                                        17, // Sedikit lebih besar untuk mobile
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                if (widget.scanType == ScanType.qrCode) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Pastikan QR code berada dalam kotak',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 13,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
-                          textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          widget.scanType == ScanType.barcode
-                              ? 'Scanner akan mendeteksi barcode secara otomatis'
-                              : 'Scanner akan mendeteksi QR code secara otomatis',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
+                        // Custom Toast Widget (appears below instruction)
+                        if (_toastMessage != null)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Container(
+                              margin: const EdgeInsets.only(top: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _isToastError
+                                    ? Colors.red.withOpacity(0.9)
+                                    : Colors.green.withOpacity(0.9),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    _isToastError
+                                        ? Icons.error
+                                        : Icons.check_circle,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      _toastMessage!,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                        if (widget.scanType == ScanType.qrCode) ...[
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+
+                        const Spacer(),
+
+                        // Center scanning area - Square untuk QR code (mobile-friendly)
+                        Container(
+                          width: widget.scanType == ScanType.qrCode
+                              ? MediaQuery.of(context).size.width *
+                                    0.75 // Square untuk QR code
+                              : MediaQuery.of(context).size.width * 0.9,
+                          height: widget.scanType == ScanType.qrCode
+                              ? MediaQuery.of(context).size.width *
+                                    0.75 // Square untuk QR code
+                              : 150,
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 3, // Lebih tebal untuk visibility
+                            ),
+                            borderRadius: BorderRadius.circular(
+                              16,
+                            ), // Lebih rounded untuk mobile
+                          ),
+                          child: Stack(
                             children: [
-                              Icon(Icons.tips_and_updates, size: 16, color: Colors.white70),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Jaga jarak yang tepat untuk hasil terbaik',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                  fontStyle: FontStyle.italic,
+                              // Corner indicators
+                              Positioned(
+                                top: 0,
+                                left: 0,
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: const BoxDecoration(
+                                    border: Border(
+                                      top: BorderSide(
+                                        color: Colors.white,
+                                        width: 3,
+                                      ),
+                                      left: BorderSide(
+                                        color: Colors.white,
+                                        width: 3,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                top: 0,
+                                right: 0,
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: const BoxDecoration(
+                                    border: Border(
+                                      top: BorderSide(
+                                        color: Colors.white,
+                                        width: 3,
+                                      ),
+                                      right: BorderSide(
+                                        color: Colors.white,
+                                        width: 3,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: const BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: Colors.white,
+                                        width: 3,
+                                      ),
+                                      left: BorderSide(
+                                        color: Colors.white,
+                                        width: 3,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: const BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: Colors.white,
+                                        width: 3,
+                                      ),
+                                      right: BorderSide(
+                                        color: Colors.white,
+                                        width: 3,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ],
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Scan type indicator
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: widget.scanType == ScanType.qrCode
+                                ? const Color(0xFF3B82F6).withOpacity(0.2)
+                                : const Color(0xFF10B981).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: widget.scanType == ScanType.qrCode
+                                  ? const Color(0xFF3B82F6)
+                                  : const Color(0xFF10B981),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                widget.scanType == ScanType.qrCode
+                                    ? Icons.qr_code
+                                    : Icons.qr_code_scanner,
+                                color: widget.scanType == ScanType.qrCode
+                                    ? const Color(0xFF3B82F6)
+                                    : const Color(0xFF10B981),
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                widget.scanType == ScanType.qrCode
+                                    ? 'QR CODE SCANNER'
+                                    : 'BARCODE SCANNER',
+                                style: TextStyle(
+                                  color: widget.scanType == ScanType.qrCode
+                                      ? const Color(0xFF3B82F6)
+                                      : const Color(0xFF10B981),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const Spacer(),
+
+                        // Bottom instruction
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.7),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                const Icon(
+                                  Icons.info_outline,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  widget.scanType == ScanType.barcode
+                                      ? 'Arahkan kamera ke barcode produk'
+                                      : 'Arahkan kamera ke QR code',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  widget.scanType == ScanType.barcode
+                                      ? 'Scanner akan mendeteksi barcode secara otomatis'
+                                      : 'Scanner akan mendeteksi QR code secara otomatis',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 13,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                if (widget.scanType == ScanType.qrCode) ...[
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.tips_and_updates,
+                                        size: 16,
+                                        color: Colors.white70,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Jaga jarak yang tepat untuk hasil terbaik',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 12,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                ),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }
