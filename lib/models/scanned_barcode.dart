@@ -13,7 +13,7 @@ class ScannedBarcode {
     required this.scannedAt,
   });
 
-  // Parse barcode format: {code_cmt}|{timestamp}|{sku}|{code_color}|{code_size}|{dozen_numbering}|{piece_numbering}
+  // Parse barcode format: {code_cmt}|{timestamp}|{sku}|{code_color}|{code_size}|{group_or_piece}|{piece_numbering}
   static ScannedBarcode? fromBarcode(String barcode) {
     final parts = barcode.split('|');
 
@@ -28,6 +28,11 @@ class ScannedBarcode {
       size: parts[4],
       scannedAt: DateTime.now(),
     );
+  }
+
+  bool isGroup() {
+    bool isGroup = barcode.split('|')[5].trim() == 'GROUP';
+    return isGroup;
   }
 
   // Validate if barcode matches expected variant

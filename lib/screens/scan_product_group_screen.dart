@@ -95,6 +95,14 @@ class _ScanProductGroupScreenState extends State<ScanProductGroupScreen>
         return;
       }
 
+      if (scannedBarcode.isGroup()) {
+        _showScannerToast?.call(
+          'Barcode tidak sesuai! Tidak boleh ada barcode group',
+          isError: true,
+        );
+        return;
+      }
+
       if (!scannedBarcode.matchesVariant(
         _currentGroup.sku,
         _currentGroup.color,
