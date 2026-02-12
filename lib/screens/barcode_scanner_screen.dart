@@ -149,10 +149,10 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
 
       if (bestCode != null && bestBarcode != null) {
         // Debug: print barcode yang terdeteksi
-        print('Scanner detected barcode: $bestCode');
-        print('Barcode length: ${bestCode.length}');
-        print('Barcode type: ${bestBarcode.type}');
-        print('Barcode format: ${bestBarcode.format}');
+        // print('Scanner detected barcode: $bestCode');
+        // print('Barcode length: ${bestCode.length}');
+        // print('Barcode type: ${bestBarcode.type}');
+        // print('Barcode format: ${bestBarcode.format}');
 
         // Validasi minimal panjang untuk barcode kita (LPK-MERAH-L-RAK01-001-PCS = ~30 chars)
         if (bestCode.length < 10) {
