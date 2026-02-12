@@ -31,7 +31,8 @@ class _InboundListScreenState extends State<InboundListScreen> {
 
     try {
       print('📦 Loading inbounds...');
-      final result = await InboundService.getInbounds();
+      // Load first page with large limit for now
+      final result = await InboundService.getInbounds(page: 1, limit: 50);
       
       if (result['success'] == true) {
         final List<dynamic> data = result['data'] ?? [];

@@ -430,6 +430,19 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
                     color: Colors.grey.shade800,
                   ),
                 ),
+                subtitle: detail.rack != null 
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 4.0),
+                        child: Text(
+                          'Rak: ${detail.rack}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ) 
+                    : null,
                 trailing: IconButton(
                   icon: Icon(Icons.copy, size: 18, color: Colors.grey.shade600),
                   onPressed: () => _copyBarcode(detail.barcode),

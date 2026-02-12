@@ -3,14 +3,17 @@ import 'package:intl/intl.dart';
 /// Model untuk detail barcode dalam inbound receive
 class InboundReceiveDetail {
   final String barcode;
+  final String? rack;
 
   InboundReceiveDetail({
     required this.barcode,
+    this.rack,
   });
 
   factory InboundReceiveDetail.fromJson(Map<String, dynamic> json) {
     return InboundReceiveDetail(
       barcode: json['barcode'] as String,
+      rack: json['rack'] as String?,
     );
   }
 }

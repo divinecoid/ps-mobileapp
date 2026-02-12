@@ -52,13 +52,25 @@ class _InboundSummaryScreenState extends State<InboundSummaryScreen> {
     });
 
     try {
-      // Extract raw barcodes from scanned products
-      final barcodes = widget.scannedBarcodes.map((b) => b.barcode).toList();
+      // Separate barcodes
+      final dozenBarcodes = widget.scannedBarcodes
+          .where((b) => b.type == BarcodeType.lusin)
+          .map((b) => b.barcode)
+          .toList();
+
+      final pieceBarcodes = widget.scannedBarcodes
+          .where((b) => b.type == BarcodeType.satuan)
+          .map((b) => {
+            'barcode': b.barcode,
+            'rack_id': b.rackId ?? '',
+          })
+          .toList();
 
       // Call API
       final result = await InboundService.submitInbound(
-        barcodes: barcodes,
-        warehouseId: _selectedWarehouseId!,
+        barcodesDozens: dozenBarcodes,
+        barcodesPieces: pieceBarcodes,
+        warehouseId: _selectedWarehouseId,
         notes: _notesController.text.trim(),
       );
 

@@ -157,14 +157,26 @@ class InboundService {
     }
   }
 
-  /// Get all inbound receiving records
-  static Future<Map<String, dynamic>> getInbounds() async {
+  /// Get all inbound receiving records with pagination
+  static Future<Map<String, dynamic>> getInbounds({
+    int page = 1,
+    int limit = 20,
+    String? search,
+  }) async {
     try {
-      final response = await ApiClient.dio.get('/inbound');
+      final response = await ApiClient.dio.get(
+        '/inbound',
+        queryParameters: {
+          'page': page,
+          'limit': limit,
+          if (search != null) 'search': search,
+        },
+      );
 
       return {
         'success': true,
         'data': response.data['data'],
+        'pagination': response.data['pagination'],
       };
     } on DioException catch (e) {
       if (e.response != null) {

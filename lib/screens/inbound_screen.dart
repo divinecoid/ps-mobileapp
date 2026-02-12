@@ -247,8 +247,10 @@ class _InboundScreenState extends State<InboundScreen> {
 
       print('Parsed: cmt=$cmtCode, timestamp=$timestamp, model=$modelSku, color=$colorCode, size=$sizeCode, group=$group, seq=$sequence');
 
-      // Determine type based on GROUP field (empty = piece, filled = dozen)
-      final isDozen = group.isNotEmpty;
+      // Determine type based on GROUP field
+      // Old logic: empty = piece, filled = dozen
+      // New logic: Check if group is DOZEN
+      final isDozen = group.toUpperCase() == 'DOZEN';
       final type = isDozen ? bp.BarcodeType.lusin : bp.BarcodeType.satuan;
       final qty = isDozen ? 12 : 1;
 
