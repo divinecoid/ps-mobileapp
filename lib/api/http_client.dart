@@ -3,133 +3,111 @@ import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../utils/secure_storage.dart';
 import '../utils/auth_event_bus.dart';
+import 'endpoints.dart';
 
 class ApiClient {
   static Completer<bool>? _refreshCompleter;
-  
+
   static final Dio dio = Dio(
     BaseOptions(
       baseUrl: dotenv.env['API_URL']!,
-      headers: {"Accept": "application/json"},
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 15),
     ),
-  )..interceptors.add(InterceptorsWrapper(
-      onResponse: (Response response, ResponseInterceptorHandler handler) {
-        // Check if response has success: false with "Token expired" message
-        if (response.data is Map && 
-            response.data['success'] == false && 
-            response.data['message']?.toString().toLowerCase().contains('token') == true) {
-          print('⚠️ Token expired detected in response: ${response.data['message']}');
-          
-          // Clear storage and trigger logout
-          AppStorage.clear();
-          AuthEventBus.notifyTokenExpired();
-          
-          // Return error to prevent further processing
-          return handler.reject(
-            DioException(
-              requestOptions: response.requestOptions,
-              response: response,
-              type: DioExceptionType.badResponse,
-              error: 'Token expired',
-            ),
-          );
-        }
-        
-        return handler.next(response);
-      },
-      onError: (DioException error, ErrorInterceptorHandler handler) async {
-        // If token expired (Laravel returns 401)
-        if (error.response?.statusCode == 401) {
-          // Check if this is the refresh endpoint itself failing
-          if (error.requestOptions.path.contains('/auth/refresh')) {
-            print('❌ Refresh endpoint failed - clearing storage and redirecting to login');
-            _refreshCompleter = null;
-            await AppStorage.clear();
-            AuthEventBus.notifyTokenExpired();
-            return handler.next(error);
-          }
-          
-          // If already refreshing, wait for the existing refresh to complete
-          if (_refreshCompleter != null) {
-            print('⏳ Waiting for ongoing refresh to complete...');
-            try {
-              final refreshed = await _refreshCompleter!.future;
-              
-              if (refreshed) {
-                print('✅ Using refreshed token, retrying request');
-                final newToken = await AppStorage.getAccessToken();
-                error.requestOptions.headers["Authorization"] = "Bearer $newToken";
-                final cloneReq = await dio.fetch(error.requestOptions);
-                return handler.resolve(cloneReq);
-              } else {
-                print('❌ Refresh failed, rejecting request');
-                return handler.next(error);
-              }
-            } catch (e) {
-              print('❌ Error waiting for refresh: $e');
-              return handler.next(error);
-            }
-          }
-          
-          // Start new refresh process
-          print('⚠️ 401 Unauthorized - attempting token refresh');
-          _refreshCompleter = Completer<bool>();
-          
-          try {
-            // Try to refresh token
-            final refreshToken = await AppStorage.getRefreshToken();
-            if (refreshToken == null) {
-              print('❌ No refresh token found');
-              _refreshCompleter!.complete(false);
-              await AppStorage.clear();
-              AuthEventBus.notifyTokenExpired();
-              return handler.next(error);
-            }
-            
-            final response = await dio.post(
-              '/auth/refresh',
-              data: {'refresh_token': refreshToken},
-            );
-            
-            if (response.data['token'] != null) {
-              final newAccessToken = response.data['token'];
-              await AppStorage.setAccessToken(newAccessToken);
-              setToken(newAccessToken);
-              
-              _refreshCompleter!.complete(true);
-              print('✅ Token refreshed successfully, retrying request');
-              
-              error.requestOptions.headers["Authorization"] = "Bearer $newAccessToken";
-              final cloneReq = await dio.fetch(error.requestOptions);
-              return handler.resolve(cloneReq);
-            } else {
-              print('❌ Token refresh failed - no token in response');
-              _refreshCompleter!.complete(false);
-              await AppStorage.clear();
-              AuthEventBus.notifyTokenExpired();
-            }
-          } catch (e) {
-            print('❌ Exception during refresh: $e');
-            _refreshCompleter!.completeError(e);
-            await AppStorage.clear();
-            AuthEventBus.notifyTokenExpired();
-          } finally {
-            // Reset completer after a short delay
-            Future.delayed(Duration(milliseconds: 100), () {
-              _refreshCompleter = null;
-            });
-          }
-        }
+  )..interceptors.add(InterceptorsWrapper(onError: _onError));
 
-        return handler.next(error);
+  static final Dio _refreshDio = Dio(
+    BaseOptions(
+      baseUrl: dotenv.env['API_URL']!,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
       },
-    ));
+    ),
+  );
 
-  static void setToken(String token) {
-    dio.options.headers["Authorization"] = "Bearer $token";
+  static Future<void> _onError(
+    DioException error,
+    ErrorInterceptorHandler handler,
+  ) async {
+    if (error.response?.statusCode != 401) {
+      return handler.next(error);
+    }
+
+    if (error.requestOptions.path.contains(Endpoint.refresh)) {
+      await _forceLogout();
+      return handler.next(error);
+    }
+
+    if (_refreshCompleter != null) {
+      final ok = await _refreshCompleter!.future;
+      if (ok) {
+        return _retry(error, handler);
+      }
+      return handler.next(error);
+    }
+
+    _refreshCompleter = Completer<bool>();
+
+    try {
+      final refreshToken = await AppStorage.getRefreshToken();
+      if (refreshToken == null) throw Exception('No refresh token');
+
+      final res = await _refreshDio.post(
+        Endpoint.refresh,
+        data: {'refresh_token': refreshToken},
+      );
+
+      final newToken = res.data['token'];
+      if (newToken == null) throw Exception('No token');
+
+      await AppStorage.setAccessToken(newToken);
+      setToken(newToken);
+
+      _refreshCompleter!.complete(true);
+      return _retry(error, handler);
+    } catch (e) {
+      _refreshCompleter!.complete(false);
+      await _forceLogout();
+      return handler.next(error);
+    } finally {
+      _refreshCompleter = null;
+    }
   }
-  
-  static void reset() {
-    dio.options.headers.remove("Authorization");
+
+  static Future<void> _retry(
+    DioException error,
+    ErrorInterceptorHandler handler,
+  ) async {
+    final opts = Options(
+      method: error.requestOptions.method,
+      headers: error.requestOptions.headers,
+    );
+
+    final response = await dio.request(
+      error.requestOptions.path,
+      data: error.requestOptions.data,
+      queryParameters: error.requestOptions.queryParameters,
+      options: opts,
+    );
+
+    return handler.resolve(response);
+  }
+
+  static void setToken(String? token) {
+    if (token == null || token.isEmpty) {
+      dio.options.headers.remove('Authorization');
+    } else {
+      dio.options.headers['Authorization'] = 'Bearer $token';
+    }
+  }
+
+  static Future<void> _forceLogout() async {
+    await AppStorage.clear();
+    AuthEventBus.notifyTokenExpired();
   }
 }

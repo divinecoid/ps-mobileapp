@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../components/app_drawer.dart';
 import '../utils/navigation_helper.dart';
 import '../api/order_service.dart';
+import '../api/marketplace_service.dart';
 import '../components/toast.dart';
 
 class OrderScreen extends StatefulWidget {
@@ -22,10 +23,29 @@ class _OrderScreenState extends State<OrderScreen> {
   bool _isLoading = true;
   String? _errorMessage;
 
+  // Marketplace filter state
+  List<Map<String, dynamic>> _marketplaces = [];
+  String? _selectedMarketplaceId;
+  String? _selectedMarketplaceName;
+
   @override
   void initState() {
     super.initState();
+    _fetchMarketplaces();
     _fetchOrders();
+  }
+
+  Future<void> _fetchMarketplaces() async {
+    try {
+      final marketplaces = await MarketplaceService.getMarketplaces();
+      setState(() {
+        _marketplaces = marketplaces;
+      });
+      print('✅ Loaded ${marketplaces.length} marketplaces');
+    } catch (e) {
+      print('❌ Error loading marketplaces: $e');
+      // Don't show error to user, filter will just be empty
+    }
   }
 
   Future<void> _fetchOrders() async {
@@ -35,18 +55,20 @@ class _OrderScreenState extends State<OrderScreen> {
     });
 
     try {
-      final orders = await OrderService.getOrders();
+      final orders = await OrderService.getOrders(
+        marketplaceId: _selectedMarketplaceId,
+      );
 
       // MAPPING SESUAI BACKEND
       final mappedOrders = orders.map((o) {
         return {
-          'id': o['id'].toString(),
+          'id': o['id'],
           'awbCode': o['awb_code'],
           'readAt': o['read_at'],
           'preparedAt': o['prepared_at'],
           'prepareDuration': o['prepare_duration'],
-          'readToShipAt': o['readtoship_at'],
-          'readToShipMarketplace': o['readtoship_marketplace'],
+          'readyToShipAt': o['readytoship_at'],
+          'readyToShipMarketplace': o['readytoship_marketplace'],
           'onlineStoreId': o['online_store_id'],
           'itemCount': o['item_count'],
           'uniqueItemCount': o['unique_item_count'],
@@ -56,20 +78,18 @@ class _OrderScreenState extends State<OrderScreen> {
           'totalShipping': o['total_shipping'],
           'totalAmount': o['total_amount'],
           'preparistUserId': o['preparist_user_id'],
-          'customerName': o['customer_name'],
+          'customerName': o['customer_name'] ?? '',
           'customerPhone': o['customer_phone'],
           'customerAddress': o['customer_address'],
+          'marketplaceId': o['marketplace_id'],
         };
       }).toList();
-
-      print("Mapped: $mappedOrders");
 
       setState(() {
         _orders = mappedOrders;
         _isLoading = false;
       });
     } catch (e) {
-      print("Fetch Error: $e");
       setState(() {
         _errorMessage = "Gagal memuat order: $e";
         _isLoading = false;
@@ -80,6 +100,124 @@ class _OrderScreenState extends State<OrderScreen> {
 
   void _handleMenuSelection(String menu) {
     NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'order');
+  }
+
+  void _showFilterDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              margin: EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      "Filter Marketplace",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            Divider(),
+            // Clear filter option
+            ListTile(
+              leading: Icon(
+                _selectedMarketplaceId == null
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: _selectedMarketplaceId == null
+                    ? Colors.blue.shade700
+                    : Colors.grey,
+              ),
+              title: Text(
+                "Semua Marketplace",
+                style: TextStyle(
+                  fontWeight: _selectedMarketplaceId == null
+                      ? FontWeight.bold
+                      : FontWeight.normal,
+                ),
+              ),
+              onTap: () {
+                setState(() {
+                  _selectedMarketplaceId = null;
+                  _selectedMarketplaceName = null;
+                });
+                _fetchOrders();
+                Navigator.pop(context);
+              },
+            ),
+            Divider(),
+            // Marketplace options
+            ..._marketplaces.map((marketplace) {
+              final id = marketplace['id'].toString();
+              // Use 'code' field for display (TIKTOK, SHOPEE, LAZADA)
+              final code = marketplace['code'] ?? 'Unknown';
+              final name = marketplace['name'] ?? marketplace['alias'] ?? code;
+              final isSelected = _selectedMarketplaceId == id;
+
+              return ListTile(
+                leading: Icon(
+                  isSelected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  color: isSelected ? Colors.blue.shade700 : Colors.grey,
+                ),
+                title: Text(
+                  code, // Display marketplace code (TIKTOK, SHOPEE, LAZADA)
+                  style: TextStyle(
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                ),
+                subtitle: Row(
+                  children: [
+                    Text(name, style: TextStyle(fontSize: 12)),
+                    SizedBox(width: 10),
+                    Text(id, style: TextStyle(fontSize: 12)),
+                  ],
+                ),
+                onTap: () {
+                  setState(() {
+                    _selectedMarketplaceId = id;
+                    _selectedMarketplaceName = code; // Store code for badge
+                  });
+                  _fetchOrders();
+                  Navigator.pop(context);
+                },
+              );
+            }).toList(),
+            SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -93,8 +231,10 @@ class _OrderScreenState extends State<OrderScreen> {
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
-        title: Text("PREPARIST APP",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(
+          "PREPARIST APP",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
         actions: [
           if (_isMultiSelectMode)
@@ -132,11 +272,35 @@ class _OrderScreenState extends State<OrderScreen> {
       child: Row(
         children: [
           ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: _showFilterDialog,
             icon: Icon(Icons.filter_list, color: Colors.white),
-            label: Text("Filter", style: TextStyle(color: Colors.white)),
+            label: Row(
+              children: [
+                Text("Filter", style: TextStyle(color: Colors.white)),
+                if (_selectedMarketplaceId != null) ...[
+                  SizedBox(width: 8),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      _selectedMarketplaceName ?? '',
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue.shade700,
+              backgroundColor: _selectedMarketplaceId != null
+                  ? Colors.orange.shade700
+                  : Colors.blue.shade700,
             ),
           ),
           SizedBox(width: 12),
@@ -201,8 +365,7 @@ class _OrderScreenState extends State<OrderScreen> {
       child: ListView.builder(
         padding: EdgeInsets.symmetric(horizontal: 16),
         itemCount: _orders.length,
-        itemBuilder: (context, i) =>
-            _buildOrderCard(_orders[i]),
+        itemBuilder: (context, i) => _buildOrderCard(_orders[i]),
       ),
     );
   }
@@ -220,23 +383,21 @@ class _OrderScreenState extends State<OrderScreen> {
         border: isSelected
             ? Border.all(color: Colors.blue.shade700, width: 3)
             : isAssigned
-                ? Border.all(color: Colors.blue.shade700, width: 2)
-                : null,
+            ? Border.all(color: Colors.blue.shade700, width: 2)
+            : null,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 4,
             offset: Offset(0, 3),
-          )
+          ),
         ],
       ),
       child: InkWell(
         onTap: () {
           if (_isMultiSelectMode) {
             setState(() {
-              isSelected
-                  ? _selectedOrders.remove(id)
-                  : _selectedOrders.add(id);
+              isSelected ? _selectedOrders.remove(id) : _selectedOrders.add(id);
             });
           } else {
             _showOrderDetail(order);
@@ -261,21 +422,28 @@ class _OrderScreenState extends State<OrderScreen> {
                     Padding(
                       padding: EdgeInsets.only(right: 12),
                       child: Icon(
-                        isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                        isSelected
+                            ? Icons.check_box
+                            : Icons.check_box_outline_blank,
                         color: isSelected ? Colors.blue.shade700 : Colors.grey,
                       ),
                     ),
                   Expanded(
                     child: Text(
                       order['customerName'] ?? '-',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                  if (isAssigned)
-                    _badge("ASSIGNED", Colors.blue.shade700),
+                  if (isAssigned) _badge("ASSIGNED", Colors.blue.shade700),
                 ],
               ),
               SizedBox(height: 12),
+
+              _iconText(Icons.store, order['marketplaceId']),
+              SizedBox(height: 8),
 
               _iconText(Icons.location_on, order['customerAddress']),
               SizedBox(height: 8),
@@ -283,8 +451,10 @@ class _OrderScreenState extends State<OrderScreen> {
               _iconText(Icons.receipt, "AWB: ${order['awbCode']}"),
               SizedBox(height: 8),
 
-              _iconText(Icons.shopping_bag,
-                  "Items: ${order['itemCount']} (${order['uniqueItemCount']} unik)"),
+              _iconText(
+                Icons.shopping_bag,
+                "Items: ${order['itemCount']} (${order['uniqueItemCount']} unik)",
+              ),
               SizedBox(height: 8),
 
               _iconText(Icons.info, "Status: ${order['status']}"),
@@ -295,12 +465,14 @@ class _OrderScreenState extends State<OrderScreen> {
     );
   }
 
-  Widget _iconText(IconData icon, String text) {
+  Widget _iconText(IconData icon, String? text) {
     return Row(
       children: [
         Icon(icon, size: 18, color: Colors.grey[600]),
         SizedBox(width: 8),
-        Expanded(child: Text(text, style: TextStyle(color: Colors.grey[700]))),
+        Expanded(
+          child: Text(text ?? '-', style: TextStyle(color: Colors.grey[700])),
+        ),
       ],
     );
   }
@@ -308,10 +480,11 @@ class _OrderScreenState extends State<OrderScreen> {
   Widget _badge(String text, Color color) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration:
-          BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
-      child: Text(text,
-          style: TextStyle(color: Colors.white, fontSize: 10)),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(text, style: TextStyle(color: Colors.white, fontSize: 10)),
     );
   }
 
@@ -350,14 +523,15 @@ class _OrderScreenState extends State<OrderScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: Text("Detail Order",
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    "Detail Order",
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
                   icon: Icon(Icons.close),
-                )
+                ),
               ],
             ),
           ),
@@ -366,10 +540,7 @@ class _OrderScreenState extends State<OrderScreen> {
             child: SingleChildScrollView(
               padding: EdgeInsets.all(16),
               child: Column(
-                children: [
-                  _detailCard(order),
-                  SizedBox(height: 20),
-                ],
+                children: [_detailCard(order), SizedBox(height: 20)],
               ),
             ),
           ),
@@ -389,8 +560,10 @@ class _OrderScreenState extends State<OrderScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(o['customerName'],
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(
+            o['customerName'],
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           SizedBox(height: 8),
           _iconText(Icons.location_on, o['customerAddress']),
           SizedBox(height: 8),
@@ -398,8 +571,10 @@ class _OrderScreenState extends State<OrderScreen> {
           SizedBox(height: 8),
           _iconText(Icons.receipt, "AWB: ${o['awbCode']}"),
           SizedBox(height: 8),
-          _iconText(Icons.shopping_bag,
-              "Items: ${o['itemCount']} (${o['uniqueItemCount']} unik)"),
+          _iconText(
+            Icons.shopping_bag,
+            "Items: ${o['itemCount']} (${o['uniqueItemCount']} unik)",
+          ),
           SizedBox(height: 8),
           _iconText(Icons.info, "Status: ${o['status']}"),
         ],
@@ -423,7 +598,8 @@ class _OrderScreenState extends State<OrderScreen> {
                 onPressed: () {},
                 child: Text("PRINT"),
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[300]),
+                  backgroundColor: Colors.grey[300],
+                ),
               ),
             ),
             SizedBox(width: 12),
@@ -438,8 +614,9 @@ class _OrderScreenState extends State<OrderScreen> {
                   style: TextStyle(color: Colors.white),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      isAssigned ? Colors.orange.shade700 : Colors.blue.shade700,
+                  backgroundColor: isAssigned
+                      ? Colors.orange.shade700
+                      : Colors.blue.shade700,
                 ),
               ),
             ),
