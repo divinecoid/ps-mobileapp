@@ -95,9 +95,9 @@ class _ScanProductGroupScreenState extends State<ScanProductGroupScreen>
         return;
       }
 
-      if (scannedBarcode.isGroup()) {
+      if (!scannedBarcode.isPiece()) {
         _showScannerToast?.call(
-          'Barcode tidak sesuai! Tidak boleh ada barcode group',
+          'Barcode tidak sesuai! Tidak boleh ada barcode selain piece',
           isError: true,
         );
         return;

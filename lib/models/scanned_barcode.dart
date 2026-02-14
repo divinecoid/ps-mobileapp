@@ -30,9 +30,9 @@ class ScannedBarcode {
     );
   }
 
-  bool isGroup() {
-    bool isGroup = barcode.split('|')[5].trim() == 'GROUP';
-    return isGroup;
+  bool isPiece() {
+    bool isPiece = barcode.split('|')[5].trim() == 'PIECE';
+    return isPiece;
   }
 
   // Validate if barcode matches expected variant
