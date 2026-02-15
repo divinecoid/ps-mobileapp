@@ -194,15 +194,6 @@ class _AppDrawerState extends State<AppDrawer> {
 
                 SizedBox(height: 8),
 
-                // Mutasi
-                _buildMenuCard(
-                  icon: Icons.swap_horiz,
-                  title: 'Mutasi',
-                  onTap: () => _handleMenuTap('mutasi'),
-                ),
-
-                SizedBox(height: 8),
-
                 // Log Out
                 _buildMenuCard(
                   icon: Icons.logout,
@@ -299,6 +290,16 @@ class _AppDrawerState extends State<AppDrawer> {
                             color: Colors.blue.shade100,
                             iconColor: Colors.blue.shade700,
                             onTap: () => _handleMenuTap('inbound'),
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: _buildScanSubmenuItem(
+                            title: 'Mutasi',
+                            icon: Icons.swap_horiz,
+                            color: Colors.green.shade100,
+                            iconColor: Colors.green.shade700,
+                            onTap: () => _handleMenuTap('mutasi'),
                           ),
                         ),
                         Padding(

@@ -83,19 +83,36 @@ class ApiClient {
     DioException error,
     ErrorInterceptorHandler handler,
   ) async {
+    final headers = Map<String, dynamic>.from(error.requestOptions.headers);
+    final token = await AppStorage.getAccessToken();
+    if (token != null) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
     final opts = Options(
       method: error.requestOptions.method,
-      headers: error.requestOptions.headers,
+      headers: headers,
     );
 
-    final response = await dio.request(
-      error.requestOptions.path,
-      data: error.requestOptions.data,
-      queryParameters: error.requestOptions.queryParameters,
-      options: opts,
-    );
-
-    return handler.resolve(response);
+    try {
+      final response = await dio.request(
+        error.requestOptions.path,
+        data: error.requestOptions.data,
+        queryParameters: error.requestOptions.queryParameters,
+        options: opts,
+      );
+      return handler.resolve(response);
+    } catch (e) {
+      if (e is DioException) {
+        return handler.next(e);
+      }
+      return handler.next(
+        DioException(
+          requestOptions: error.requestOptions,
+          error: e,
+        ),
+      );
+    }
   }
 
   static void setToken(String? token) {

@@ -5,6 +5,7 @@ import '../screens/my_order_screen.dart';
 import '../screens/outbound_screen.dart';
 import '../screens/inbound_screen.dart';
 import '../screens/reject_screen.dart';
+import '../screens/mutation_screen.dart';
 import '../screens/login_screen.dart';
 import '../state/auth_provider.dart';
 import 'package:provider/provider.dart';
@@ -86,7 +87,12 @@ class NavigationHelper {
         return true;
 
       case 'mutasi':
-        // TODO: Navigate to mutasi screen
+        if (currentScreen != 'mutation') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => MutationScreen()),
+          );
+        }
         return true;
 
       case 'logout':
