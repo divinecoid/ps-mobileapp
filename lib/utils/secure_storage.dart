@@ -15,5 +15,14 @@ class AppStorage {
   static Future<String?> getRefreshToken() =>
       _storage.read(key: "refresh_token");
 
+  static Future<void> setUserId(String id) => _storage.write(key: "user_id", value: id);
+
+  static Future<void> setUserName(String name) =>
+      _storage.write(key: "user_name", value: name);
+
+  static Future<String?> getUserId() => _storage.read(key: "user_id");
+
+  static Future<String?> getUserName() => _storage.read(key: "user_name");
+
   static Future<void> clear() => _storage.deleteAll();
 }

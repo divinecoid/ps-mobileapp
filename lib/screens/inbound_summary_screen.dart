@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/barcode_product.dart';
 import '../api/inbound_service.dart';
+import '../api/warehouse_service.dart';
 import '../components/toast.dart';
 
 class InboundSummaryScreen extends StatefulWidget {
@@ -20,18 +21,36 @@ class _InboundSummaryScreenState extends State<InboundSummaryScreen> {
   String? _selectedWarehouseId;
   final TextEditingController _notesController = TextEditingController();
 
-  // TODO: Replace with real warehouse data from API
-  final List<Map<String, String>> _warehouses = [
-    {'id': '9d7e1234-5678-90ab-cdef-1234567890ab', 'name': 'Warehouse Main'},
-    {'id': '9d7e1234-5678-90ab-cdef-1234567890ac', 'name': 'Warehouse Secondary'},
-  ];
+  bool _isLoadingWarehouses = true;
+  List<Warehouse> _warehouses = [];
 
   @override
   void initState() {
     super.initState();
-    // Set default warehouse
-    if (_warehouses.isNotEmpty) {
-      _selectedWarehouseId = _warehouses[0]['id'];
+    _fetchWarehouses();
+  }
+
+  Future<void> _fetchWarehouses() async {
+    setState(() {
+      _isLoadingWarehouses = true;
+    });
+
+    try {
+      final warehouses = await WarehouseService.getWarehouses();
+      setState(() {
+        _warehouses = warehouses;
+        if (_warehouses.isNotEmpty) {
+          _selectedWarehouseId = _warehouses[0].id;
+        }
+        _isLoadingWarehouses = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingWarehouses = false;
+      });
+      if (mounted) {
+        Toast.show(context, 'Gagal memuat warehouse: $e');
+      }
     }
   }
 
@@ -367,26 +386,34 @@ class _InboundSummaryScreenState extends State<InboundSummaryScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: _selectedWarehouseId,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  ),
-                  items: _warehouses.map((warehouse) {
-                    return DropdownMenuItem<String>(
-                      value: warehouse['id'],
-                      child: Text(warehouse['name']!),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedWarehouseId = value;
-                    });
-                  },
-                ),
+                _isLoadingWarehouses
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                    : DropdownButtonFormField<String>(
+                        value: _selectedWarehouseId,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          hintText: _warehouses.isEmpty ? 'Tidak ada warehouse' : 'Pilih warehouse',
+                        ),
+                        items: _warehouses.map((warehouse) {
+                          return DropdownMenuItem<String>(
+                            value: warehouse.id,
+                            child: Text(warehouse.name),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedWarehouseId = value;
+                          });
+                        },
+                      ),
                 SizedBox(height: 16),
                 Text(
                   'Catatan (Optional)',

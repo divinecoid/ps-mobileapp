@@ -23,6 +23,13 @@ class AuthService {
       await AppStorage.setAccessToken(accessToken);
       await AppStorage.setRefreshToken(refreshToken);
 
+      // Store user info
+      final userData = response.data['user'];
+      if (userData != null) {
+        await AppStorage.setUserId(userData['id'].toString());
+        await AppStorage.setUserName(userData['name'] ?? '');
+      }
+
       // Apply token to headers for future API calls
       ApiClient.setToken(accessToken);
 

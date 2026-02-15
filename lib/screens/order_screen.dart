@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../components/app_drawer.dart';
 import '../utils/navigation_helper.dart';
 import '../api/order_service.dart';
 import '../api/marketplace_service.dart';
 import '../components/toast.dart';
+import '../state/auth_provider.dart';
 
 class OrderScreen extends StatefulWidget {
   const OrderScreen({super.key});
@@ -13,9 +15,6 @@ class OrderScreen extends StatefulWidget {
 }
 
 class _OrderScreenState extends State<OrderScreen> {
-  /// Track orders you assigned
-  final Set<String> _assignedOrders = {};
-
   bool _isMultiSelectMode = false;
   final Set<String> _selectedOrders = {};
 
@@ -369,10 +368,14 @@ class _OrderScreenState extends State<OrderScreen> {
       ),
     );
   }
-
   Widget _buildOrderCard(Map<String, dynamic> order) {
-    final id = order['id'];
-    final isAssigned = _assignedOrders.contains(id);
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final currentUserId = auth.userId;
+
+    final id = order['id']?.toString() ?? '';
+    final preparistId = order['preparistUserId']?.toString();
+    final isAssignedToMe = preparistId != null && preparistId == currentUserId;
+    final isAssignedToOther = preparistId != null && preparistId != currentUserId;
     final isSelected = _selectedOrders.contains(id);
 
     return Container(
@@ -382,8 +385,8 @@ class _OrderScreenState extends State<OrderScreen> {
         borderRadius: BorderRadius.circular(12),
         border: isSelected
             ? Border.all(color: Colors.blue.shade700, width: 3)
-            : isAssigned
-            ? Border.all(color: Colors.blue.shade700, width: 2)
+            : (isAssignedToMe || isAssignedToOther)
+            ? Border.all(color: isAssignedToMe ? Colors.blue.shade700 : Colors.orange.shade700, width: 2)
             : null,
         boxShadow: [
           BoxShadow(
@@ -437,7 +440,11 @@ class _OrderScreenState extends State<OrderScreen> {
                       ),
                     ),
                   ),
-                  if (isAssigned) _badge("ASSIGNED", Colors.blue.shade700),
+                  if (preparistId != null)
+                    _badge(
+                      isAssignedToMe ? "DITANGAN SAYA" : "DIAMBIL ORANG",
+                      isAssignedToMe ? Colors.blue.shade700 : Colors.orange.shade700,
+                    ),
                 ],
               ),
               SizedBox(height: 12),
@@ -489,18 +496,20 @@ class _OrderScreenState extends State<OrderScreen> {
   }
 
   void _showOrderDetail(Map<String, dynamic> order) {
-    final id = order['id'];
-    final isAssigned = _assignedOrders.contains(id);
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final currentUserId = auth.userId;
+    final preparistId = order['preparistUserId']?.toString();
+    final isAssignedToMe = preparistId != null && preparistId == currentUserId;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _buildDetailSheet(order, isAssigned),
+      builder: (context) => _buildDetailSheet(order, isAssignedToMe),
     );
   }
 
-  Widget _buildDetailSheet(Map<String, dynamic> order, bool isAssigned) {
+  Widget _buildDetailSheet(Map<String, dynamic> order, bool isMe) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.9,
       decoration: BoxDecoration(
@@ -544,7 +553,7 @@ class _OrderScreenState extends State<OrderScreen> {
               ),
             ),
           ),
-          _actionButtons(order['id'], isAssigned),
+          _actionButtons(order['id'], isMe),
         ],
       ),
     );
@@ -582,7 +591,7 @@ class _OrderScreenState extends State<OrderScreen> {
     );
   }
 
-  Widget _actionButtons(String id, bool isAssigned) {
+  Widget _actionButtons(String id, bool isMe) {
     return Container(
       padding: EdgeInsets.fromLTRB(16, 16, 16, 32),
       decoration: BoxDecoration(
@@ -606,15 +615,15 @@ class _OrderScreenState extends State<OrderScreen> {
             Expanded(
               child: ElevatedButton(
                 onPressed: () {
-                  isAssigned ? _unassignOrder(id) : _assignOrder(id);
+                  isMe ? _unassignOrder(id) : _assignOrder(id);
                   Navigator.pop(context);
                 },
                 child: Text(
-                  isAssigned ? "LEMPAR ORDERAN" : "AMBIL ORDERAN",
+                  isMe ? "LEMPAR ORDERAN" : "AMBIL ORDERAN",
                   style: TextStyle(color: Colors.white),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isAssigned
+                  backgroundColor: isMe
                       ? Colors.orange.shade700
                       : Colors.blue.shade700,
                 ),
@@ -626,33 +635,81 @@ class _OrderScreenState extends State<OrderScreen> {
     );
   }
 
-  // ASSIGN LOGIC
-  void _assignOrder(String id) {
-    setState(() => _assignedOrders.add(id));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Order di-assign"), backgroundColor: Colors.green),
-    );
+  Future<void> _assignOrder(String orderId) async {
+    try {
+      final res = await OrderService.assignOrder(orderId);
+      if (res['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Order berhasil di-assign"),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _fetchOrders();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message'] ?? "Gagal assign"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+      );
+    }
   }
 
-  void _unassignOrder(String id) {
-    setState(() => _assignedOrders.remove(id));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Order dilepas"), backgroundColor: Colors.orange),
-    );
+  Future<void> _unassignOrder(String orderId) async {
+    try {
+      final res = await OrderService.unassignOrder(orderId);
+      if (res['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Order dilepas"),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        _fetchOrders();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message'] ?? "Gagal unassign"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+      );
+    }
   }
 
-  void _assignMultipleOrders() {
-    final count = _selectedOrders.length;
-    setState(() {
-      _assignedOrders.addAll(_selectedOrders);
-      _selectedOrders.clear();
-      _isMultiSelectMode = false;
-    });
+  Future<void> _assignMultipleOrders() async {
+    final selectedIds = _selectedOrders.toList();
+    if (selectedIds.isEmpty) return;
+
+    int successCount = 0;
+    for (var id in selectedIds) {
+      try {
+        final res = await OrderService.assignOrder(id);
+        if (res['success'] == true) successCount++;
+      } catch (e) {}
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text("$count order berhasil di-assign"),
+        content: Text("$successCount order berhasil di-assign"),
         backgroundColor: Colors.green,
       ),
     );
+
+    setState(() {
+      _selectedOrders.clear();
+      _isMultiSelectMode = false;
+    });
+    _fetchOrders();
   }
 }

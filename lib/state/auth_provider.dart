@@ -5,14 +5,20 @@ import '../utils/secure_storage.dart';
 
 class AuthProvider extends ChangeNotifier {
   String? _accessToken;
+  String? _userId;
+  String? _userName;
 
   String? get accessToken => _accessToken;
+  String? get userId => _userId;
+  String? get userName => _userName;
 
   /// Handles login using the AuthService
   Future<bool> login(String username, String password) async {
     final success = await AuthService.login(username, password);
     if (success) {
       _accessToken = await AppStorage.getAccessToken();
+      _userId = await AppStorage.getUserId();
+      _userName = await AppStorage.getUserName();
       if (_accessToken != null) {
         ApiClient.setToken(_accessToken!); // apply Authorization header
       }
@@ -39,6 +45,8 @@ class AuthProvider extends ChangeNotifier {
     final success = await AuthService.logout();
     if (success) {
       _accessToken = null;
+      _userId = null;
+      _userName = null;
       notifyListeners();
       return true;
     }

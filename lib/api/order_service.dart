@@ -103,4 +103,64 @@ class OrderService {
       rethrow;
     }
   }
+
+  /// POST /outbound/assign-order → Assign order to me
+  static Future<Map<String, dynamic>> assignOrder(String orderId) async {
+    try {
+      final response = await ApiClient.dio.post(
+        Endpoint.outboundAssignOrder,
+        data: {'order_id': orderId},
+      );
+
+      if (response.data is Map) {
+        return Map<String, dynamic>.from(response.data);
+      } else {
+        throw Exception('Invalid response format');
+      }
+    } on DioException catch (e) {
+      if (e.response != null) {
+        return Map<String, dynamic>.from(e.response!.data);
+      }
+      rethrow;
+    }
+  }
+
+  /// POST /outbound/unassign-order → Unassign order
+  static Future<Map<String, dynamic>> unassignOrder(String orderId) async {
+    try {
+      final response = await ApiClient.dio.post(
+        Endpoint.outboundUnassignOrder,
+        data: {'order_id': orderId},
+      );
+
+      if (response.data is Map) {
+        return Map<String, dynamic>.from(response.data);
+      } else {
+        throw Exception('Invalid response format');
+      }
+    } on DioException catch (e) {
+      if (e.response != null) {
+        return Map<String, dynamic>.from(e.response!.data);
+      }
+      rethrow;
+    }
+  }
+
+  /// GET /outbound/assigned-orders → Get orders assigned to me
+  static Future<List<Map<String, dynamic>>> getAssignedOrders() async {
+    try {
+      final response = await ApiClient.dio.get(Endpoint.outboundAssignedOrders);
+
+      final data = response.data;
+
+      if (data is Map && data.containsKey('data')) {
+        return List<Map<String, dynamic>>.from(data['data']);
+      }
+
+      return [];
+    } on DioException catch (e) {
+      if (e.response != null) {}
+      rethrow;
+    }
+  }
 }

@@ -32,4 +32,7 @@ class Endpoint {
   static const outboundValidateProductBarcode =
       '/outbound/validate-product-barcode';
   static const outboundSubmitPreparation = '/outbound/submit-preparation';
+  static const outboundAssignOrder = '/outbound/assign-order';
+  static const outboundUnassignOrder = '/outbound/unassign-order';
+  static const outboundAssignedOrders = '/outbound/assigned-orders';
 }
