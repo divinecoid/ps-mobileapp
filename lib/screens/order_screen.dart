@@ -570,7 +570,7 @@ class _OrderScreenState extends State<OrderScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            o['customerName'],
+            (o['customerName'] ?? '-').toString(),
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           SizedBox(height: 8),
@@ -585,7 +585,7 @@ class _OrderScreenState extends State<OrderScreen> {
             "Items: ${o['itemCount']} (${o['uniqueItemCount']} unik)",
           ),
           SizedBox(height: 8),
-          _iconText(Icons.info, "Status: ${o['status']}"),
+          _iconText(Icons.info, "Status: ${o['status']?.toString() ?? '-'}"),
         ],
       ),
     );

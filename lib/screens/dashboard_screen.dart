@@ -251,7 +251,7 @@ class _DashboardScreen extends State<DashboardScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withValues(alpha: 0.1),
+                        color: Colors.grey.withOpacity(0.1),
                         spreadRadius: 1,
                         blurRadius: 4,
                         offset: Offset(0, 2),
@@ -349,7 +349,7 @@ class _DashboardScreen extends State<DashboardScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withValues(alpha: 0.1),
+                        color: Colors.grey.withOpacity(0.1),
                         spreadRadius: 1,
                         blurRadius: 4,
                         offset: Offset(0, 2),
@@ -451,7 +451,7 @@ class _DashboardScreen extends State<DashboardScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withValues(alpha: 0.1),
+                        color: Colors.grey.withOpacity(0.1),
                         spreadRadius: 1,
                         blurRadius: 4,
                         offset: Offset(0, 2),
@@ -526,7 +526,7 @@ class _DashboardScreen extends State<DashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: color.withValues(alpha: 0.3),
+            color: color.withOpacity(0.3),
             spreadRadius: 1,
             blurRadius: 4,
             offset: Offset(0, 2),
@@ -543,7 +543,7 @@ class _DashboardScreen extends State<DashboardScreen> {
               Container(
                 padding: EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
+                  color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, color: Colors.white, size: 16),
@@ -555,7 +555,7 @@ class _DashboardScreen extends State<DashboardScreen> {
             title,
             style: TextStyle(
               fontSize: 12,
-              color: Colors.white.withValues(alpha: 0.9),
+              color: Colors.white.withOpacity(0.9),
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -578,7 +578,7 @@ class _DashboardScreen extends State<DashboardScreen> {
                   unit,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.white.withValues(alpha: 0.8),
+                    color: Colors.white.withOpacity(0.8),
                   ),
                 ),
               ),
@@ -626,9 +626,9 @@ class _DashboardScreen extends State<DashboardScreen> {
     return Container(
       padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Column(
         children: [

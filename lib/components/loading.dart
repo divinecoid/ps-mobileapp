@@ -18,7 +18,7 @@ class Loading extends StatelessWidget {
         if (isLoading)
           Positioned.fill(
             child: Container(
-              color: Colors.black.withValues(alpha: 0.4),
+              color: Colors.black.withOpacity(0.4),
               child: Center(
                 child: Container(
                   padding: EdgeInsets.all(16),

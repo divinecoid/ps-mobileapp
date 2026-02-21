@@ -19,16 +19,37 @@ class OrderService {
         queryParameters: queryParams.isNotEmpty ? queryParams : null,
       );
 
-      // Handle various Laravel response structures
       final data = response.data;
 
       if (data is Map && data.containsKey('data')) {
-        return List<Map<String, dynamic>>.from(data['data']);
+        final orders = data['data'];
+        if (orders is List) {
+          return orders.map((o) {
+            final m = Map<String, dynamic>.from(o);
+            return {
+              'id': (m['id'] ?? '').toString(),
+              'awbCode': (m['awb_code'] ?? '-').toString(),
+              'marketplaceId': (m['marketplace_id'] ?? '').toString(),
+              'onlineStoreId': (m['online_store_id'] ?? '').toString(),
+              'itemCount': m['item_count'] ?? 0,
+              'uniqueItemCount': m['unique_item_count'] ?? 0,
+              'status': (m['status'] ?? '-').toString(),
+              'totalWeight': m['total_weight'] ?? 0,
+              'totalPrice': m['total_price'] ?? 0,
+              'totalAmount': m['total_amount'] ?? 0,
+              'customerName': (m['customer_name'] ?? '-').toString(),
+              'customerPhone': (m['customer_phone'] ?? '-').toString(),
+              'customerAddress': (m['customer_address'] ?? '-').toString(),
+              'preparistUserId': (m['preparist_user_id'] ?? '').toString(),
+              'preparedAt': (m['prepared_at'] ?? '').toString(),
+              'prepareDuration': (m['prepare_duration'] ?? '').toString(),
+            };
+          }).toList();
+        }
       }
 
       return [];
     } on DioException catch (e) {
-      if (e.response != null) {}
       rethrow;
     }
   }
@@ -38,7 +59,6 @@ class OrderService {
     try {
       final response = await ApiClient.dio.get('/order/$id');
 
-      // Handle response format dari Laravel
       if (response.data is Map && response.data.containsKey('data')) {
         return Map<String, dynamic>.from(response.data['data']);
       } else if (response.data is Map) {
@@ -47,7 +67,6 @@ class OrderService {
         throw Exception('Invalid response format');
       }
     } on DioException catch (e) {
-      if (e.response != null) {}
       rethrow;
     }
   }
@@ -153,13 +172,26 @@ class OrderService {
 
       final data = response.data;
 
-      if (data is Map && data.containsKey('data')) {
-        return List<Map<String, dynamic>>.from(data['data']);
+      if (data is Map && data.containsKey('data') && data['data'] != null) {
+        final items = data['data'];
+        if (items is List) {
+          return items.where((item) => item != null).map((item) {
+            final m = Map<String, dynamic>.from(item);
+            return {
+              'id': (m['id'] ?? '').toString(),
+              'customer_name': (m['customer_name'] ?? '-').toString(),
+              'customer_address': (m['customer_address'] ?? '-').toString(),
+              'item_count': (m['item_count'] ?? 0).toString(),
+              'status': (m['status'] ?? '-').toString(),
+              'awb_code': (m['awb_code'] ?? '-').toString(),
+              'notes': (m['notes'] ?? '-').toString(),
+            };
+          }).toList();
+        }
       }
 
       return [];
     } on DioException catch (e) {
-      if (e.response != null) {}
       rethrow;
     }
   }

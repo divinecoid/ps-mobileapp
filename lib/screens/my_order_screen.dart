@@ -39,7 +39,7 @@ class _MyOrderScreenState extends State<MyOrderScreen> {
         _errorMessage = "Gagal memuat order: $e";
         _isLoading = false;
       });
-      Toast.show(context, _errorMessage!);
+      Toast.show(context, _errorMessage ?? "Terjadi kesalahan memuat data");
     }
   }
 
@@ -183,7 +183,7 @@ class _MyOrderScreenState extends State<MyOrderScreen> {
         border: Border.all(color: Colors.blue.shade700, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.1),
+            color: Colors.grey.withOpacity(0.1),
             spreadRadius: 1,
             blurRadius: 4,
             offset: Offset(0, 2),
@@ -205,7 +205,7 @@ class _MyOrderScreenState extends State<MyOrderScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      order['customerName'],
+                      (order['customer_name'] ?? '-').toString(),
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -244,7 +244,7 @@ class _MyOrderScreenState extends State<MyOrderScreen> {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      order['customer_address'] ?? '-',
+                      (order['customer_address'] ?? '-').toString(),
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey[700],
@@ -265,7 +265,7 @@ class _MyOrderScreenState extends State<MyOrderScreen> {
                   ),
                   SizedBox(width: 8),
                   Text(
-                    'Total Items: ${order['item_count']}',
+                    'Total Items: ${order['item_count']?.toString() ?? '0'}',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[700],
@@ -285,7 +285,7 @@ class _MyOrderScreenState extends State<MyOrderScreen> {
                   ),
                   SizedBox(width: 8),
                   Text(
-                    'Status: ${order['status']}',
+                    'Status: ${order['status']?.toString() ?? '-'}',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[700],
@@ -314,7 +314,7 @@ class _MyOrderScreenState extends State<MyOrderScreen> {
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          order['notes'],
+                          (order['notes'] ?? '-').toString(),
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.orange.shade900,
@@ -400,7 +400,7 @@ class _MyOrderScreenState extends State<MyOrderScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            order['customer_name'] ?? '-',
+                            (order['customer_name'] ?? '-').toString(),
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -408,11 +408,8 @@ class _MyOrderScreenState extends State<MyOrderScreen> {
                             ),
                           ),
                           SizedBox(height: 8),
-                          _iconDetail(Icons.location_on, order['customer_address'] ?? '-'),
-                          SizedBox(height: 8),
-                          _iconDetail(Icons.receipt, "AWB: ${order['awb_code']}"),
-                          SizedBox(height: 8),
-                          _iconDetail(Icons.shopping_bag, "Items: ${order['item_count']}"),
+                          _iconDetail(Icons.receipt, (order['awb_code'] ?? '-').toString()),
+                          _iconDetail(Icons.shopping_bag, "Items: ${order['item_count']?.toString() ?? '0'}"),
                         ],
                       ),
                     ),
@@ -462,7 +459,7 @@ class _MyOrderScreenState extends State<MyOrderScreen> {
                       child: ElevatedButton(
                         onPressed: () {
                           Navigator.pop(context);
-                          _unassignOrder(order['id']);
+                          _unassignOrder((order['id'] ?? '').toString());
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.orange.shade700,
@@ -491,14 +488,14 @@ class _MyOrderScreenState extends State<MyOrderScreen> {
     );
   }
 
-  Widget _iconDetail(IconData icon, String text) {
+  Widget _iconDetail(IconData icon, String? text) {
     return Row(
       children: [
         Icon(icon, size: 18, color: Colors.grey[600]),
         SizedBox(width: 8),
         Expanded(
           child: Text(
-            text,
+            text ?? '-',
             style: TextStyle(fontSize: 14, color: Colors.grey[700]),
           ),
         ),
