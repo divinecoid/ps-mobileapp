@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../api/mutation_service.dart';
 import '../models/mutation.dart';
 import '../components/toast.dart';
+import 'mutation_detail_screen.dart';
 
 class MutationListScreen extends StatefulWidget {
   const MutationListScreen({super.key});
@@ -126,36 +127,47 @@ class _MutationListScreenState extends State<MutationListScreen> {
     return Card(
       margin: EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.swap_horiz, color: Colors.blue.shade700),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Mutasi #${mutation.id.substring(0, 8)}', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text('${mutation.formattedDateShort} • ${mutation.formattedTime}', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(4)),
-                  child: Text('${mutation.totalItems} Items', style: TextStyle(fontSize: 12, color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
-                ),
-              ],
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MutationDetailScreen(mutation: mutation),
             ),
-            if (mutation.notes != null && mutation.notes!.isNotEmpty) ...[
-              SizedBox(height: 12),
-              Text('Catatan: ${mutation.notes}', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+          );
+        },
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.swap_horiz, color: Colors.blue.shade700),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Mutasi #${mutation.id.substring(0, 8)}', style: TextStyle(fontWeight: FontWeight.bold)),
+                        Text('${mutation.formattedDateShort} • ${mutation.formattedTime}', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(4)),
+                    child: Text('${mutation.totalItems} Items', style: TextStyle(fontSize: 12, color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+              if (mutation.notes != null && mutation.notes!.isNotEmpty) ...[
+                SizedBox(height: 12),
+                Text('Catatan: ${mutation.notes}', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
