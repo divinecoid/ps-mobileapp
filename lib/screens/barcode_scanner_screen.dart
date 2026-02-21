@@ -53,10 +53,6 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
 
     // Konfigurasi khusus untuk QR code (mobile-friendly)
     controller = MobileScannerController(
-      cameraResolution: const Size(
-        1920,
-        1080,
-      ), // High resolution untuk QR code yang jelas
       detectionSpeed: DetectionSpeed.normal,
       facing: CameraFacing.back,
       torchEnabled: false,
@@ -317,7 +313,11 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               children: [
                 // Scanner
                 _isInitialized
-                    ? MobileScanner(controller: controller, onDetect: _onDetect)
+                    ? MobileScanner(
+                        controller: controller,
+                        fit: BoxFit.cover,
+                        onDetect: _onDetect,
+                      )
                     : Container(
                         color: Colors.black,
                         child: const Center(
@@ -401,67 +401,19 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                             ),
                           ),
                         ),
-                        // Custom Toast Widget (appears below instruction)
-                        if (_toastMessage != null)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Container(
-                              margin: const EdgeInsets.only(top: 12),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _isToastError
-                                    ? Colors.red.withOpacity(0.9)
-                                    : Colors.green.withOpacity(0.9),
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.3),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    _isToastError
-                                        ? Icons.error
-                                        : Icons.check_circle,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    child: Text(
-                                      _toastMessage!,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
 
                         const Spacer(),
-
+                        const Spacer(),
                         // Center scanning area - Square untuk QR code (mobile-friendly)
                         Container(
                           width: widget.scanType == ScanType.qrCode
                               ? MediaQuery.of(context).size.width *
-                                    0.75 // Square untuk QR code
-                              : MediaQuery.of(context).size.width * 0.9,
+                                    0.65 // Square untuk QR code
+                              : MediaQuery.of(context).size.width * 0.75,
                           height: widget.scanType == ScanType.qrCode
                               ? MediaQuery.of(context).size.width *
-                                    0.75 // Square untuk QR code
-                              : 150,
+                                    0.65 // Square untuk QR code
+                              : 120,
                           decoration: BoxDecoration(
                             border: Border.all(
                               color: Colors.white,
@@ -676,6 +628,54 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+
+                // Custom Toast Overlay - positioned at top layer to avoid pushing scanner
+                if (_toastMessage != null)
+                  Positioned(
+                    top: 200, // Below instruction box
+                    left: 20,
+                    right: 20,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _isToastError
+                            ? Colors.red.withOpacity(0.9)
+                            : Colors.green.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _isToastError ? Icons.error : Icons.check_circle,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              _toastMessage!,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
               ],
