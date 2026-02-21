@@ -32,6 +32,7 @@ class _MutationScreenState extends State<MutationScreen> {
   
   // Rack data from API
   List<Rack> _racks = [];
+  Rack? _activeRack;
 
   @override
   void initState() {
@@ -161,13 +162,34 @@ class _MutationScreenState extends State<MutationScreen> {
   Future<void> _handleBarcodeScanned(String barcode) async {
     final cleanedBarcode = barcode.trim();
     
+    // Step 1: Handle Rack Scanning if no active rack
+    if (_activeRack == null) {
+      final rack = _racks.firstWhere(
+        (r) => r.code.toLowerCase() == cleanedBarcode.toLowerCase() || r.id == cleanedBarcode,
+        orElse: () => Rack(id: '', code: '', name: '', warehouseId: ''),
+      );
+
+      if (rack.id.isNotEmpty) {
+        setState(() {
+          _activeRack = rack;
+        });
+        SoundService().playSuccess();
+        Toast.show(context, '✅ Rak terpilih: ${rack.displayName}');
+      } else {
+        SoundService().playError();
+        Toast.show(context, '⚠️ Barcode bukan QR Rak yang valid');
+      }
+      return;
+    }
+
+    // Step 2: Handle Item Scanning
     if (_scannedBarcodes.any((b) => b.barcode == cleanedBarcode)) {
       SoundService().playError();
       Toast.show(context, '⚠️ Barcode sudah ada di daftar');
       return;
     }
 
-    // Stop scanner while validating and picking rack
+    // Stop scanner while validating
     _scannerController.stop();
 
     try {
@@ -179,12 +201,27 @@ class _MutationScreenState extends State<MutationScreen> {
         final color = data['color'];
         final size = data['size'];
         
-        await _showRackSelectionDialog(
-          cleanedBarcode: cleanedBarcode,
-          modelName: model['name'] ?? model['sku'],
-          colorName: color['name'] ?? color['code'],
-          sizeCode: size['name'] ?? size['code'],
-        );
+        final modelName = model['name'] ?? model['sku'];
+        final colorName = color['name'] ?? color['code'];
+        final sizeCode = size['name'] ?? size['code'];
+
+        final barcodeProduct = bp.BarcodeProduct(
+          barcode: cleanedBarcode,
+          type: bp.BarcodeType.satuan,
+          model: modelName,
+          warna: colorName,
+          size: sizeCode,
+          rak: '', 
+          rackId: _activeRack!.id,
+          qty: 1,
+        ).markAsScanned();
+
+        setState(() {
+          _scannedBarcodes.insert(0, barcodeProduct);
+        });
+
+        SoundService().playSuccess();
+        Toast.show(context, '✅ Item ditambahkan ke ${_activeRack!.code}');
       } else {
         SoundService().playError();
         Toast.show(context, '❌ ${result['message']}');
@@ -198,107 +235,6 @@ class _MutationScreenState extends State<MutationScreen> {
     }
   }
 
-  Future<void> _showRackSelectionDialog({
-    required String cleanedBarcode,
-    required String modelName,
-    required String colorName,
-    required String sizeCode,
-  }) async {
-    String? selectedRackId;
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              Icon(Icons.inventory, color: Colors.blue.shade700),
-              SizedBox(width: 12),
-              Text('Pilih Rak Tujuan'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('$modelName - $colorName - $sizeCode', style: TextStyle(fontWeight: FontWeight.bold)),
-                    SizedBox(height: 4),
-                    Text('Barcode: $cleanedBarcode', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
-                  ],
-                ),
-              ),
-              SizedBox(height: 16),
-              _isLoadingRacks
-                  ? Center(child: CircularProgressIndicator())
-                  : _rackLoadError || _racks.isEmpty
-                      ? Text('Gagal memuat rak', style: TextStyle(color: Colors.red))
-                      : DropdownButtonFormField<String>(
-                          value: selectedRackId,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            hintText: 'Pilih rak...',
-                          ),
-                          items: _racks.map((rack) {
-                            return DropdownMenuItem<String>(
-                              value: rack.id,
-                              child: Text(rack.displayName, overflow: TextOverflow.ellipsis),
-                            );
-                          }).toList(),
-                          onChanged: (value) => setDialogState(() => selectedRackId = value),
-                        ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Batal', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              onPressed: selectedRackId == null
-                  ? null
-                  : () {
-                      Navigator.pop(context);
-                      final barcodeProduct = bp.BarcodeProduct(
-                        barcode: cleanedBarcode,
-                        type: bp.BarcodeType.satuan,
-                        model: modelName,
-                        warna: colorName,
-                        size: sizeCode,
-                        rak: '', // Original rak not needed for submission
-                        rackId: selectedRackId,
-                        qty: 1,
-                      ).markAsScanned();
-
-                      setState(() {
-                        _scannedBarcodes.insert(0, barcodeProduct);
-                      });
-
-                      SoundService().playSuccess();
-                      Toast.show(context, '✅ Item ditambahkan');
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue.shade600,
-                foregroundColor: Colors.white,
-              ),
-              child: Text('Simpan'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   void _removeBarcode(bp.BarcodeProduct barcode) {
     setState(() {
@@ -383,6 +319,7 @@ class _MutationScreenState extends State<MutationScreen> {
               setState(() {
                 _scannedBarcodes.clear();
                 _notesController.clear();
+                _activeRack = null;
               });
             },
             child: Text('OK'),
@@ -452,10 +389,28 @@ class _MutationScreenState extends State<MutationScreen> {
                     top: 20, left: 0, right: 0,
                     child: Container(
                       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      color: Colors.black.withOpacity(0.6),
-                      child: Text('Scan Barcode untuk Mutasi', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      color: _activeRack == null ? Colors.orange.withOpacity(0.8) : Colors.black.withOpacity(0.6),
+                      child: Text(
+                        _activeRack == null ? 'MOHON SCAN QR RAK DULU' : 'SCAN BARCODE BARANG (Rak: ${_activeRack!.code})', 
+                        textAlign: TextAlign.center, 
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+                      ),
                     ),
                   ),
+                  if (_activeRack != null)
+                    Positioned(
+                      top: 60, right: 16,
+                      child: ElevatedButton.icon(
+                        onPressed: () => setState(() => _activeRack = null),
+                        icon: Icon(Icons.refresh, size: 16),
+                        label: Text('Ganti Rak', style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.withOpacity(0.8),
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        ),
+                      ),
+                    ),
                   Positioned(
                     bottom: 16, left: 16, right: 16,
                     child: Container(
