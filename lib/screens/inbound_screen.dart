@@ -26,6 +26,7 @@ class _InboundScreenState extends State<InboundScreen> {
     detectionSpeed: DetectionSpeed.normal,
   );
   
+  DateTime? _lastScanTime;
   List<bp.BarcodeProduct> _scannedBarcodes = [];
   bool _isListExpanded = true;
   bool _isSubmitting = false;
@@ -198,11 +199,23 @@ class _InboundScreenState extends State<InboundScreen> {
   }
 
   void _onDetect(BarcodeCapture capture) {
+    // Beri jeda 1 detik antar scan agar tidak spam
+    if (_lastScanTime != null && 
+        DateTime.now().difference(_lastScanTime!) < const Duration(seconds: 1)) {
+      return;
+    }
+
     final List<Barcode> barcodes = capture.barcodes;
     
     for (final barcode in barcodes) {
       final String? code = barcode.rawValue;
       if (code != null && code.isNotEmpty) {
+        // Cek apakah scan yang sama sedang dalam proses validasi
+        if (_validatingBarcodes.contains(code.trim())) {
+          return;
+        }
+
+        _lastScanTime = DateTime.now();
         _handleBarcodeScanned(code);
         // Only process first barcode to avoid duplicates
         break;
@@ -216,6 +229,7 @@ class _InboundScreenState extends State<InboundScreen> {
       final cleanedBarcode = barcode.trim();
       
       // Prevent rapid scanning of same barcode while still validating
+      // (Sudah ditangani di atas _onDetect, namun tetap dijaga di sini)
       if (_validatingBarcodes.contains(cleanedBarcode)) {
         return;
       }
