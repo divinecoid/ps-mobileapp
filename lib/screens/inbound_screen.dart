@@ -479,6 +479,10 @@ class _InboundScreenState extends State<InboundScreen> {
                             ),
                           );
                           
+                          // Tunggu sebentar agar BarcodeScannerScreen benar-benar ke-dispose 
+                          // dan melepas resource hardware kamera (mengakali layar hitam/blank)
+                          await Future.delayed(const Duration(milliseconds: 500));
+                          
                           // Jalankan kembali scanner utama
                           if (mounted) {
                             await _scannerController.start();
