@@ -26,7 +26,7 @@ class _InboundScreenState extends State<InboundScreen> {
     detectionSpeed: DetectionSpeed.normal,
   );
   
-  DateTime? _lastScanTime;
+  bool _isProcessingScan = false;
   List<bp.BarcodeProduct> _scannedBarcodes = [];
   bool _isListExpanded = true;
   bool _isSubmitting = false;
@@ -199,11 +199,7 @@ class _InboundScreenState extends State<InboundScreen> {
   }
 
   void _onDetect(BarcodeCapture capture) {
-    // Beri jeda 1 detik antar scan agar tidak spam
-    if (_lastScanTime != null && 
-        DateTime.now().difference(_lastScanTime!) < const Duration(seconds: 1)) {
-      return;
-    }
+    if (_isProcessingScan) return;
 
     final List<Barcode> barcodes = capture.barcodes;
     
@@ -215,9 +211,23 @@ class _InboundScreenState extends State<InboundScreen> {
           return;
         }
 
-        _lastScanTime = DateTime.now();
-        _handleBarcodeScanned(code);
-        // Only process first barcode to avoid duplicates
+        setState(() {
+          _isProcessingScan = true;
+        });
+
+        _handleBarcodeScanned(code).then((_) {
+          // Beri jeda 1 detik setelah proses selesai (atau setelah dialog ditutup)
+          // agar tidak langsung spam scan barang berikutnya
+          Future.delayed(const Duration(milliseconds: 1000), () {
+            if (mounted) {
+              setState(() {
+                _isProcessingScan = false;
+              });
+            }
+          });
+        });
+        
+        // Only process first barcode frame to avoid duplicate racing
         break;
       }
     }
@@ -306,7 +316,10 @@ class _InboundScreenState extends State<InboundScreen> {
         Toast.show(context, '✅ ${barcodeProduct.typeLabel} terscan\n$modelName - $colorName');
       } else {
         // Piece barcode - show rack selection dialog
-        // Stop main scanner before showing dialog so it doesn't scan barcodes behind the dialog
+        // 1. Play success alert indicating barcode is recognized
+        SoundService().playSuccess();
+        
+        // 2. Stop main scanner before showing dialog so it doesn't scan barcodes behind the dialog
         await _scannerController.stop();
         
         await _showRackSelectionDialog(
