@@ -292,7 +292,10 @@ class _InboundScreenState extends State<InboundScreen> {
         Toast.show(context, '✅ ${barcodeProduct.typeLabel} terscan\n$modelName - $colorName');
       } else {
         // Piece barcode - show rack selection dialog
-        _showRackSelectionDialog(
+        // Stop main scanner before showing dialog so it doesn't scan barcodes behind the dialog
+        await _scannerController.stop();
+        
+        await _showRackSelectionDialog(
           cleanedBarcode: cleanedBarcode,
           type: type,
           modelName: modelName,
@@ -302,6 +305,11 @@ class _InboundScreenState extends State<InboundScreen> {
           qty: qty,
           timestamp: timestamp,
         );
+        
+        // Start scanner again after dialog is closed
+        if (mounted) {
+          await _scannerController.start();
+        }
       }
     } catch (e) {
       print('Error parsing barcode: $e');
@@ -316,7 +324,7 @@ class _InboundScreenState extends State<InboundScreen> {
     }
   }
 
-  void _showRackSelectionDialog({
+  Future<void> _showRackSelectionDialog({
     required String cleanedBarcode,
     required bp.BarcodeType type,
     required String modelName,
@@ -325,7 +333,7 @@ class _InboundScreenState extends State<InboundScreen> {
     required String cmtCode,
     required int qty,
     required String timestamp,
-  }) {
+  }) async {
     final TextEditingController rackCodeController = TextEditingController();
     Timer? _debounce;
     bool _isValidating = false;
@@ -369,7 +377,7 @@ class _InboundScreenState extends State<InboundScreen> {
       }
     }
 
-    showDialog(
+    await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
