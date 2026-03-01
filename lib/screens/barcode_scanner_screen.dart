@@ -150,13 +150,16 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         // print('Barcode type: ${bestBarcode.type}');
         // print('Barcode format: ${bestBarcode.format}');
 
-        // Validasi minimal panjang untuk barcode kita (LPK-MERAH-L-RAK01-001-PCS = ~30 chars)
-        if (bestCode.length < 10) {
+        // Validasi minimal panjang untuk barcode kita (opsional, tergantung jenis scan)
+        // Kita cabut validasi panjang ini agar bisa scan kode rak yang pendek
+        /*
+        if (bestCode.length < 10 && widget.scanType == ScanType.barcode) {
           print(
             'Barcode terlalu pendek, mungkin tidak valid. Panjang: ${bestCode.length}',
           );
           return; // Skip jika terlalu pendek
         }
+        */
 
         // Check if barcode was scanned before
         if (widget.scannedBarcodes != null &&

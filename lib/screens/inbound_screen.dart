@@ -9,7 +9,9 @@ import '../utils/sound_service.dart';
 import '../api/inbound_service.dart';
 import '../api/warehouse_service.dart';
 import '../api/rack_service.dart';
+import 'dart:async';
 import 'inbound_list_screen.dart';
+import 'barcode_scanner_screen.dart';
 import 'dart:convert';
 
 class InboundScreen extends StatefulWidget {
@@ -39,6 +41,9 @@ class _InboundScreenState extends State<InboundScreen> {
   
   // Rack data from API
   List<Rack> _racks = [];
+
+  // Set to prevent duplicate API calls for same barcode while validating
+  final Set<String> _validatingBarcodes = {};
 
   @override
   void initState() {
@@ -205,30 +210,29 @@ class _InboundScreenState extends State<InboundScreen> {
     }
   }
 
-  void _handleBarcodeScanned(String barcode) {
-    // Parse barcode dari format API:
-    // CMT_CODE|TIMESTAMP|MODEL_SKU|COLOR_CODE|SIZE_CODE|GROUP|SEQUENCE
-    // Group kosong untuk piece, terisi untuk dozen
-    
+  Future<void> _handleBarcodeScanned(String barcode) async {
     try {
       // Trim whitespace
       final cleanedBarcode = barcode.trim();
       
+      // Prevent rapid scanning of same barcode while still validating
+      if (_validatingBarcodes.contains(cleanedBarcode)) {
+        return;
+      }
+      
       // Debug: print barcode yang dibaca
       print('Barcode scanned: $barcode');
       
-      // Cek apakah barcode sudah pernah discan
+      // Cek apakah barcode sudah pernah discan secara lokal
       if (_scannedBarcodes.any((b) => b.barcode == cleanedBarcode)) {
         // Play error beep untuk barcode yang sudah discan
         SoundService().playError();
-        Toast.show(context, '⚠️ Barcode sudah pernah di-scan');
+        Toast.show(context, '⚠️ Barcode sudah ada di list scan');
         return;
       }
 
-      // Parse barcode dengan separator pipe
+      // Parse barcode dengan separator pipe just for basic format check before API call
       final parts = cleanedBarcode.split('|');
-      
-      print('Parsed parts: $parts (length: ${parts.length})');
       
       if (parts.length != 7) {
         // Play error beep untuk format tidak valid
@@ -237,26 +241,35 @@ class _InboundScreenState extends State<InboundScreen> {
         return;
       }
 
-      final cmtCode = parts[0].trim();
-      final timestamp = parts[1].trim();
-      final modelSku = parts[2].trim();
-      final colorCode = parts[3].trim();
-      final sizeCode = parts[4].trim();
-      final group = parts[5].trim(); // Kosong untuk piece, terisi untuk dozen
-      final sequence = parts[6].trim();
+      setState(() {
+        _validatingBarcodes.add(cleanedBarcode);
+      });
 
-      print('Parsed: cmt=$cmtCode, timestamp=$timestamp, model=$modelSku, color=$colorCode, size=$sizeCode, group=$group, seq=$sequence');
+      // Show validating indicator if needed, but Toast might be enough or just silent until result
+      print('Validating barcode via API: $cleanedBarcode');
+      final result = await InboundService.validateBarcode(cleanedBarcode);
+      
+      if (!mounted) return;
 
-      // Determine type based on GROUP field
-      // Old logic: empty = piece, filled = dozen
-      // New logic: Check if group is DOZEN
-      final isDozen = group.toUpperCase() == 'DOZEN';
+      if (!result['success']) {
+        SoundService().playError();
+        Toast.show(context, '❌ ${result['message']}');
+        return;
+      }
+
+      final data = result['data'];
+      
+      final cmtCode = data['cmt']['code'];
+      final cmtName = data['cmt']['name'];
+      final modelName = data['model']['name'];
+      final colorName = data['color']['name'];
+      final sizeCode = data['size']['code'];
+      final isDozen = data['is_dozen'] == true;
+      
+      final timestamp = parts[1].trim(); // Extract timestamp for local object construction if needed
+
       final type = isDozen ? bp.BarcodeType.lusin : bp.BarcodeType.satuan;
       final qty = isDozen ? 12 : 1;
-
-      // Untuk demo, gunakan nama yang lebih readable
-      final modelName = _getModelName(modelSku);
-      final colorName = _getColorName(colorCode);
 
       if (isDozen) {
         // Dozen barcode - add directly without rack selection
@@ -276,7 +289,7 @@ class _InboundScreenState extends State<InboundScreen> {
         });
 
         SoundService().playSuccess();
-        Toast.show(context, '✅ ${barcodeProduct.typeLabel} terscan');
+        Toast.show(context, '✅ ${barcodeProduct.typeLabel} terscan\n$modelName - $colorName');
       } else {
         // Piece barcode - show rack selection dialog
         _showRackSelectionDialog(
@@ -293,7 +306,13 @@ class _InboundScreenState extends State<InboundScreen> {
     } catch (e) {
       print('Error parsing barcode: $e');
       SoundService().playError();
-      Toast.show(context, '❌ Error parsing barcode');
+      if (mounted) Toast.show(context, '❌ Error parsing barcode');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _validatingBarcodes.remove(barcode.trim());
+        });
+      }
     }
   }
 
@@ -307,7 +326,48 @@ class _InboundScreenState extends State<InboundScreen> {
     required int qty,
     required String timestamp,
   }) {
-    String? selectedRackId;
+    final TextEditingController rackCodeController = TextEditingController();
+    Timer? _debounce;
+    bool _isValidating = false;
+    String? _validatedRackId;
+    String? _validatedRackName;
+    String? _rackError;
+
+    // Helper function to validate rack from API
+    Future<void> _validateRack(String code, StateSetter setDialogState) async {
+      if (code.isEmpty) {
+        setDialogState(() {
+          _validatedRackId = null;
+          _validatedRackName = null;
+          _rackError = null;
+          _isValidating = false;
+        });
+        return;
+      }
+
+      setDialogState(() {
+        _isValidating = true;
+        _validatedRackId = null;
+        _validatedRackName = null;
+        _rackError = null;
+      });
+
+      final rack = await RackService.getRackByCode(code);
+
+      if (rack != null) {
+        setDialogState(() {
+          _validatedRackId = rack.id;
+          _validatedRackName = rack.name;
+          _isValidating = false;
+          _rackError = null;
+        });
+      } else {
+        setDialogState(() {
+          _isValidating = false;
+          _rackError = 'Rak tidak ditemukan';
+        });
+      }
+    }
 
     showDialog(
       context: context,
@@ -386,80 +446,109 @@ class _InboundScreenState extends State<InboundScreen> {
                   
                   SizedBox(height: 8),
                   
-                  // Rack dropdown
-                  _isLoadingRacks
-                      ? Container(
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                  // Rack Text Input with QR Scan
+                  TextFormField(
+                    controller: rackCodeController,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      isDense: true,
+                      hintText: 'Ketik atau scan kode rak...',
+                      suffixIcon: IconButton(
+                        icon: Icon(Icons.qr_code_scanner, color: Colors.blue.shade700),
+                        onPressed: () async {
+                          // Hentikan sementara scanner utama agar kamera bisa digunakan di screen baru
+                          await _scannerController.stop();
+
+                          final scannedCode = await Navigator.push<String>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => BarcodeScannerScreen(
+                                title: 'Scan QR Rak',
+                                instruction: 'Arahkan kamera ke QR Code Rak',
+                                scanType: ScanType.qrCode,
+                                onScanResult: (code) {
+                                  Navigator.pop(context, code);
+                                },
                               ),
-                              SizedBox(width: 12),
-                              Text('Memuat rak...'),
-                            ],
-                          ),
-                        )
-                      : _rackLoadError || _racks.isEmpty
-                          ? Container(
-                              padding: EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.error_outline, color: Colors.red, size: 20),
-                                  SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'Gagal memuat rak',
-                                      style: TextStyle(color: Colors.red),
-                                    ),
-                                  ),
-                                  TextButton(
-                                    onPressed: () async {
-                                      await _loadRacks();
-                                      setDialogState(() {});
-                                    },
-                                    child: Text('Retry'),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : DropdownButtonFormField<String>(
-                              value: selectedRackId,
-                              isExpanded: true,
-                              decoration: InputDecoration(
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 12,
-                                ),
-                                isDense: true,
-                                hintText: 'Pilih rak...',
-                              ),
-                              items: _racks.map((rack) {
-                                return DropdownMenuItem<String>(
-                                  value: rack.id,
-                                  child: Text(
-                                    rack.displayName,
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 1,
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                setDialogState(() {
-                                  selectedRackId = value;
-                                });
-                              },
                             ),
+                          );
+                          
+                          // Jalankan kembali scanner utama
+                          if (mounted) {
+                            await _scannerController.start();
+                          }
+                          
+                          if (scannedCode != null && scannedCode.isNotEmpty) {
+                            setDialogState(() {
+                              rackCodeController.text = scannedCode;
+                            });
+                            // Validasi otomatis saat dari scanner
+                            await _validateRack(scannedCode, setDialogState);
+                          }
+                        },
+                      ),
+                    ),
+                    onChanged: (value) {
+                      setDialogState(() {}); // Rebuild instantly for text update
+                      
+                      // Debounce api call
+                      if (_debounce?.isActive ?? false) _debounce!.cancel();
+                      _debounce = Timer(const Duration(milliseconds: 700), () {
+                        _validateRack(value.trim(), setDialogState);
+                      });
+                    },
+                  ),
+                  
+                  // Validation status mapping
+                  if (_isValidating)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0, left: 4.0),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 8),
+                          Text('Memeriksa kode rak...', style: TextStyle(fontSize: 12, color: Colors.blue)),
+                        ],
+                      ),
+                    )
+                  else if (_rackError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0, left: 4.0),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline, size: 14, color: Colors.red),
+                          SizedBox(width: 4),
+                          Text(_rackError!, style: TextStyle(fontSize: 12, color: Colors.red)),
+                        ],
+                      ),
+                    )
+                  else if (_validatedRackName != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0, left: 4.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.check_circle_outline, size: 14, color: Colors.green),
+                          SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              '$_validatedRackName', 
+                              style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold)
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -474,7 +563,7 @@ class _InboundScreenState extends State<InboundScreen> {
               child: Text('Batal', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-              onPressed: selectedRackId == null
+              onPressed: _validatedRackId == null || _isValidating
                   ? null
                   : () {
                       Navigator.pop(context);
@@ -487,7 +576,8 @@ class _InboundScreenState extends State<InboundScreen> {
                         warna: colorName,
                         size: sizeCode,
                         rak: cmtCode,
-                        rackId: selectedRackId,
+                        rackId: _validatedRackId,
+                        rackCode: rackCodeController.text.trim(),
                         qty: qty,
                         requestId: 'REQ-$cmtCode-$timestamp',
                       ).markAsScanned();
@@ -514,32 +604,7 @@ class _InboundScreenState extends State<InboundScreen> {
     );
   }
 
-  String _getModelName(String code) {
-    // Mapping kode ke nama model
-    final modelMap = {
-      'LC': 'LENGAN PANJANG KERAH',
-      'LPK': 'LENGAN PANJANG KERAH',
-      'LPS': 'LENGAN PENDEK',
-      'TSH': 'T-SHIRT',
-    };
-    return modelMap[code.toUpperCase()] ?? code;
-  }
 
-  String _getColorName(String code) {
-    // Mapping kode warna ke nama warna
-    final colorMap = {
-      'RED': 'Merah',
-      'BLUE': 'Biru',
-      'BLACK': 'Hitam',
-      'WHITE': 'Putih',
-      'GREEN': 'Hijau',
-      'MERAH': 'Merah',
-      'BIRU': 'Biru',
-      'HITAM': 'Hitam',
-      'PUTIH': 'Putih',
-    };
-    return colorMap[code.toUpperCase()] ?? code;
-  }
 
   void _removeBarcode(bp.BarcodeProduct barcode) {
     setState(() {
@@ -603,7 +668,7 @@ class _InboundScreenState extends State<InboundScreen> {
     // Check if piece barcodes exist but some don't have rack_id
     final piecesWithoutRack = pieceBarcodes.where((p) => p['rack_id']?.isEmpty ?? true).length;
     if (piecesWithoutRack > 0) {
-      Toast.show(context, '$piecesWithoutRack barcode piece belum memiliki rak yang dipilih');
+      Toast.show(context, '$piecesWithoutRack barcode piece belum divalidasi dengan id rak yang valid');
       return;
     }
 
@@ -1267,14 +1332,8 @@ class _InboundScreenState extends State<InboundScreen> {
   Widget _buildBarcodeCard(bp.BarcodeProduct barcode) {
     // Get rack name if available for piece items
     String? rackName;
-    if (barcode.type == bp.BarcodeType.satuan && barcode.rackId != null) {
-      final rack = _racks.firstWhere(
-        (r) => r.id == barcode.rackId,
-        orElse: () => Rack(id: '', code: '', name: 'Unknown', warehouseId: ''),
-      );
-      if (rack.id.isNotEmpty) {
-        rackName = rack.shortDisplayName;
-      }
+    if (barcode.type == bp.BarcodeType.satuan && barcode.rackCode != null) {
+      rackName = barcode.rackCode;
     }
 
     return Card(

@@ -30,6 +30,9 @@ class BarcodeProduct {
   /// Diperlukan untuk barcodes_piece saat submit ke API
   final String? rackId;
   
+  /// Rack Code untuk piece items
+  final String? rackCode;
+  
   /// Jumlah item yang diwakili oleh barcode ini
   /// - Untuk lusin: biasanya 12, tapi bisa kurang jika sisa
   /// - Untuk satuan: selalu 1
@@ -52,6 +55,7 @@ class BarcodeProduct {
     required this.size,
     required this.rak,
     this.rackId,
+    this.rackCode,
     required this.qty,
     this.isScanned = false,
     this.scannedAt,
@@ -67,6 +71,7 @@ class BarcodeProduct {
     String? size,
     String? rak,
     String? rackId,
+    String? rackCode,
     int? qty,
     bool? isScanned,
     DateTime? scannedAt,
@@ -80,6 +85,7 @@ class BarcodeProduct {
       size: size ?? this.size,
       rak: rak ?? this.rak,
       rackId: rackId ?? this.rackId,
+      rackCode: rackCode ?? this.rackCode,
       qty: qty ?? this.qty,
       isScanned: isScanned ?? this.isScanned,
       scannedAt: scannedAt ?? this.scannedAt,
@@ -128,6 +134,7 @@ class BarcodeProduct {
       'size': size,
       'rak': rak,
       'rackId': rackId,
+      'rackCode': rackCode,
       'qty': qty,
       'isScanned': isScanned,
       'scannedAt': scannedAt?.toIso8601String(),
@@ -148,6 +155,7 @@ class BarcodeProduct {
       size: json['size'] as String,
       rak: json['rak'] as String,
       rackId: json['rackId'] as String?,
+      rackCode: json['rackCode'] as String?,
       qty: json['qty'] as int,
       isScanned: json['isScanned'] as bool? ?? false,
       scannedAt: json['scannedAt'] != null

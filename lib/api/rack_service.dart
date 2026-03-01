@@ -92,4 +92,38 @@ class RackService {
     final allRacks = await getRacks();
     return allRacks.where((rack) => rack.warehouseId == warehouseId).toList();
   }
+
+  /// Get a single rack by its exact code
+  /// 
+  /// Parameters:
+  /// - code: Exact rack code to search for
+  /// 
+  /// Returns:
+  /// - Rack object if found, null otherwise
+  static Future<Rack?> getRackByCode(String code) async {
+    try {
+      final response = await ApiClient.dio.get(
+        '/rack',
+        queryParameters: {'code': code},
+      );
+
+      if (response.data['success'] == true) {
+        final List<dynamic> data = response.data['data'] ?? [];
+        if (data.isNotEmpty) {
+          final rack = Rack.fromJson(data.first as Map<String, dynamic>);
+          if (!rack.isDeleted) {
+            return rack;
+          }
+        }
+      }
+
+      return null;
+    } on DioException catch (e) {
+      print('❌ Error fetching rack by code: ${e.message}');
+      return null;
+    } catch (e) {
+      print('❌ Unexpected error fetching rack by code: $e');
+      return null;
+    }
+  }
 }
