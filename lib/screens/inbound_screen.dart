@@ -250,7 +250,7 @@ class _InboundScreenState extends State<InboundScreen> {
       // Cek apakah barcode sudah pernah discan secara lokal
       if (_scannedBarcodes.any((b) => b.barcode == cleanedBarcode)) {
         // Play error beep untuk barcode yang sudah discan
-        SoundService().playError();
+        await SoundService().playError();
         Toast.show(context, '⚠️ Barcode sudah ada di list scan');
         return;
       }
@@ -260,7 +260,7 @@ class _InboundScreenState extends State<InboundScreen> {
       
       if (parts.length != 7) {
         // Play error beep untuk format tidak valid
-        SoundService().playError();
+        await SoundService().playError();
         Toast.show(context, '❌ Format barcode tidak valid');
         return;
       }
@@ -276,7 +276,7 @@ class _InboundScreenState extends State<InboundScreen> {
       if (!mounted) return;
 
       if (!result['success']) {
-        SoundService().playError();
+        await SoundService().playError();
         Toast.show(context, '❌ ${result['message']}');
         return;
       }
@@ -312,12 +312,12 @@ class _InboundScreenState extends State<InboundScreen> {
           _scannedBarcodes.insert(0, barcodeProduct);
         });
 
-        SoundService().playSuccess();
+        await SoundService().playSuccess();
         Toast.show(context, '✅ ${barcodeProduct.typeLabel} terscan\n$modelName - $colorName');
       } else {
         // Piece barcode - show rack selection dialog
         // 1. Play success alert indicating barcode is recognized
-        SoundService().playSuccess();
+        await SoundService().playSuccess();
         
         // 2. Stop main scanner before showing dialog so it doesn't scan barcodes behind the dialog
         await _scannerController.stop();
@@ -340,7 +340,7 @@ class _InboundScreenState extends State<InboundScreen> {
       }
     } catch (e) {
       print('Error parsing barcode: $e');
-      SoundService().playError();
+      await SoundService().playError();
       if (mounted) Toast.show(context, '❌ Error parsing barcode');
     } finally {
       if (mounted) {

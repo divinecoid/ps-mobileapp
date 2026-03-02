@@ -4,17 +4,68 @@ import 'package:intl/intl.dart';
 class InboundReceiveDetail {
   final String barcode;
   final String? rack;
+  final String? model;
+  final String? color;
+  final String? size;
+  final String? serialNumber;
+  final int qty;
 
   InboundReceiveDetail({
     required this.barcode,
     this.rack,
+    this.model,
+    this.color,
+    this.size,
+    this.serialNumber,
+    this.qty = 1,
   });
 
   factory InboundReceiveDetail.fromJson(Map<String, dynamic> json) {
     return InboundReceiveDetail(
       barcode: json['barcode'] as String,
       rack: json['rack'] as String?,
+      model: json['model'] as String?,
+      color: json['color'] as String?,
+      size: json['size'] as String?,
+      serialNumber: json['serial_number'] as String?,
+      qty: json['qty'] as int? ?? 1,
     );
+  }
+}
+
+/// Model untuk ringkasan item dalam inbound
+class InboundSummary {
+  final String? model;
+  final String? color;
+  final String? size;
+  final String? serialNumber;
+  final int totalQty;
+
+  InboundSummary({
+    this.model,
+    this.color,
+    this.size,
+    this.serialNumber,
+    required this.totalQty,
+  });
+
+  factory InboundSummary.fromJson(Map<String, dynamic> json) {
+    return InboundSummary(
+      model: json['model'] as String?,
+      color: json['color'] as String?,
+      size: json['size'] as String?,
+      serialNumber: json['serial_number'] as String?,
+      totalQty: json['total_qty'] as int? ?? 0,
+    );
+  }
+
+  String get displayName {
+    final parts = [
+      if (model != null && model!.isNotEmpty) model,
+      if (color != null && color!.isNotEmpty) color,
+      if (size != null && size!.isNotEmpty) size,
+    ];
+    return parts.isEmpty ? 'Unknown Item' : parts.join(' - ');
   }
 }
 
@@ -36,8 +87,8 @@ class CmtInfo {
 
   factory CmtInfo.fromJson(Map<String, dynamic> json) {
     return CmtInfo(
-      code: json['code'] as String,
-      name: json['name'] as String,
+      code: (json['code'] as String?) ?? '',
+      name: (json['name'] as String?) ?? '',
       contactPerson: json['contact_person'] as String?,
       phone: json['phone'] as String?,
       address: json['address'] as String?,
@@ -55,6 +106,7 @@ class InboundReceive {
   final String? notes;
   final CmtInfo? cmtInfo;
   final List<InboundReceiveDetail> details;
+  final List<InboundSummary> summary;
 
   InboundReceive({
     required this.id,
@@ -65,6 +117,7 @@ class InboundReceive {
     this.notes,
     this.cmtInfo,
     required this.details,
+    this.summary = const [],
   });
 
   factory InboundReceive.fromJson(Map<String, dynamic> json) {
@@ -87,6 +140,12 @@ class InboundReceive {
         .map((detail) => InboundReceiveDetail.fromJson(detail as Map<String, dynamic>))
         .toList();
 
+    // Parse summary
+    final summaryList = json['summary'] as List<dynamic>? ?? [];
+    final summary = summaryList
+        .map((s) => InboundSummary.fromJson(s as Map<String, dynamic>))
+        .toList();
+
     return InboundReceive(
       id: json['id'] as String,
       warehouseId: json['warehouse_id'] as String?,
@@ -96,6 +155,7 @@ class InboundReceive {
       notes: json['notes'] as String?,
       cmtInfo: cmtInfo,
       details: details,
+      summary: summary,
     );
   }
 
@@ -126,7 +186,10 @@ class InboundReceive {
   /// Display name: "CMT01 - CMT Bandung"
   String get cmtDisplayName {
     if (cmtInfo != null) {
-      return '${cmtInfo!.code} - ${cmtInfo!.name}';
+      if (cmtInfo!.code.isEmpty && cmtInfo!.name.isEmpty) {
+        return 'Mutation / No CMT';
+      }
+      return '${cmtInfo!.code} - ${cmtInfo!.name}'.replaceAll(RegExp(r'^ - | - $'), '');
     }
     return '-';
   }

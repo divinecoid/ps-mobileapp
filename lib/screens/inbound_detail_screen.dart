@@ -177,11 +177,110 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
           
           SizedBox(height: 16),
           
+          // Summary Section
+          _buildSummarySection(),
+          
+          SizedBox(height: 16),
+          
           // Barcodes List
           _buildBarcodesSection(),
           
           SizedBox(height: 24),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSummarySection() {
+    if (_inbound!.summary.isEmpty) return SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              Icon(Icons.summarize, size: 20, color: Colors.grey.shade700),
+              SizedBox(width: 8),
+              Text(
+                'Ringkasan Barang',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 12),
+        ..._inbound!.summary.map((summary) => _buildSummaryCard(summary)).toList(),
+      ],
+    );
+  }
+
+  Widget _buildSummaryCard(InboundSummary summary) {
+    return Card(
+      margin: EdgeInsets.only(bottom: 8),
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '${summary.totalQty}',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade700,
+                ),
+              ),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    summary.displayName,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                  if (summary.serialNumber != null && summary.serialNumber!.isNotEmpty)
+                    Text(
+                      'SN: ${summary.serialNumber}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Text(
+              'PCS',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade400,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -427,22 +526,65 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
                   style: TextStyle(
                     fontSize: 13,
                     fontFamily: 'monospace',
+                    fontWeight: FontWeight.w500,
                     color: Colors.grey.shade800,
                   ),
                 ),
-                subtitle: detail.rack != null 
-                    ? Padding(
-                        padding: const EdgeInsets.only(top: 4.0),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (detail.model != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2.0),
                         child: Text(
-                          'Rak: ${detail.rack}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.blue.shade700,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          '${detail.model} - ${detail.color} - ${detail.size}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                         ),
-                      ) 
-                    : null,
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.orange.shade200),
+                            ),
+                            child: Text(
+                              'Qty: ${detail.qty}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                          ),
+                          if (detail.rack != null) ...[
+                            SizedBox(width: 8),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.blue.shade200),
+                              ),
+                              child: Text(
+                                'Rak: ${detail.rack}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue.shade900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
                 trailing: IconButton(
                   icon: Icon(Icons.copy, size: 18, color: Colors.grey.shade600),
                   onPressed: () => _copyBarcode(detail.barcode),
