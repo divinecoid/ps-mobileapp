@@ -76,25 +76,81 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        title: Text(
-          _inbound?.cmtCode ?? 'Detail Penerimaan',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
+    if (_isLoading || _hasError || _inbound == null) {
+      return Scaffold(
+        backgroundColor: Colors.grey.shade50,
+        appBar: AppBar(
+          title: Text('Detail Penerimaan'),
+          backgroundColor: Colors.blue.shade700,
+          foregroundColor: Colors.white,
+        ),
+        body: _buildLoadingOrError(),
+      );
+    }
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: Colors.grey.shade50,
+        appBar: AppBar(
+          title: Text(
+            _inbound?.cmtCode ?? 'Detail Penerimaan',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+          backgroundColor: Colors.blue.shade700,
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+        body: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Column(
+                    children: [
+                      _buildCmtInfoCard(),
+                      SizedBox(height: 16),
+                      _buildReceiptInfoCard(),
+                    ],
+                  ),
+                ),
+              ),
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _SliverAppBarDelegate(
+                  TabBar(
+                    tabs: [
+                      Tab(text: 'DITERIMA'),
+                      Tab(text: 'REJECT (BS)'),
+                    ],
+                    labelColor: Colors.blue.shade700,
+                    unselectedLabelColor: Colors.grey.shade600,
+                    indicatorColor: Colors.blue.shade700,
+                    indicatorWeight: 3,
+                    labelStyle: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ];
+          },
+          body: TabBarView(
+            children: [
+              // Tab 1: Diterima
+              _buildAcceptedTab(),
+              // Tab 2: Reject
+              _buildRejectedTab(),
+            ],
           ),
         ),
-        backgroundColor: Colors.blue.shade700,
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
-      body: _buildBody(),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildLoadingOrError() {
     if (_isLoading) {
       return Center(
         child: Column(
@@ -157,33 +213,23 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
         ),
       );
     }
+    
+    return Center(child: Text('Data tidak ditemukan'));
+  }
 
-    if (_inbound == null) {
-      return Center(child: Text('Data tidak ditemukan'));
-    }
-
+  Widget _buildAcceptedTab() {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // CMT Information Card
-          _buildCmtInfoCard(),
+          // Summary Section (Accepted only)
+          _buildAcceptedSummarySection(),
           
           SizedBox(height: 16),
           
-          // Receipt Information Card
-          _buildReceiptInfoCard(),
-          
-          SizedBox(height: 16),
-          
-          // Summary Section
-          _buildSummarySection(),
-          
-          SizedBox(height: 16),
-          
-          // Barcodes List
-          _buildBarcodesSection(),
+          // Barcodes List (Accepted only)
+          _buildAcceptedBarcodesSection(),
           
           SizedBox(height: 24),
         ],
@@ -191,8 +237,47 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
     );
   }
 
-  Widget _buildSummarySection() {
-    if (_inbound!.summary.isEmpty) return SizedBox.shrink();
+  Widget _buildRejectedTab() {
+    final rejectedSummary = _inbound!.summary.where((s) => s.isReject).toList();
+    
+    if (rejectedSummary.isEmpty && _inbound!.rejectedDetails.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle_outline, size: 64, color: Colors.green.shade200),
+            SizedBox(height: 16),
+            Text(
+              'Tidak ada barang reject',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Summary Section (Rejected only)
+          _buildRejectedSummarySection(),
+          
+          SizedBox(height: 16),
+          
+          // Barcodes List (Rejected only)
+          _buildRejectedBarcodesSection(),
+          
+          SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAcceptedSummarySection() {
+    final acceptedSummary = _inbound!.summary.where((s) => !s.isReject).toList();
+    if (acceptedSummary.isEmpty) return SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,32 +286,64 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
           padding: EdgeInsets.symmetric(horizontal: 4),
           child: Row(
             children: [
-              Icon(Icons.summarize, size: 20, color: Colors.grey.shade700),
+              Icon(Icons.inventory_2, size: 20, color: Colors.blue.shade700),
               SizedBox(width: 8),
               Text(
                 'Ringkasan Barang',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade800,
+                  color: Colors.blue.shade800,
                 ),
               ),
             ],
           ),
         ),
         SizedBox(height: 12),
-        ..._inbound!.summary.map((summary) => _buildSummaryCard(summary)).toList(),
+        ...acceptedSummary.map((summary) => _buildSummaryCard(summary)).toList(),
       ],
     );
   }
 
-  Widget _buildSummaryCard(InboundSummary summary) {
+  Widget _buildRejectedSummarySection() {
+    final rejectedSummary = _inbound!.summary.where((s) => s.isReject).toList();
+    if (rejectedSummary.isEmpty) return SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              Icon(Icons.report_problem, size: 20, color: Colors.red.shade700),
+              SizedBox(width: 8),
+              Text(
+                'Ringkasan Barang (Reject)',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red.shade800,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 12),
+        ...rejectedSummary.map((summary) => _buildSummaryCard(summary, isReject: true)).toList(),
+      ],
+    );
+  }
+
+  Widget _buildSummaryCard(InboundSummary summary, {bool isReject = false}) {
+    final themeColor = isReject ? Colors.red : Colors.blue;
+    
     return Card(
       margin: EdgeInsets.only(bottom: 8),
       elevation: 1,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: Colors.grey.shade200),
+        side: BorderSide(color: themeColor.shade100),
       ),
       child: Padding(
         padding: EdgeInsets.all(12),
@@ -235,7 +352,7 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
             Container(
               padding: EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
+                color: themeColor.shade50,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -243,7 +360,7 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.blue.shade700,
+                  color: themeColor.shade700,
                 ),
               ),
             ),
@@ -252,13 +369,35 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    summary.displayName,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade800,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          summary.displayName,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey.shade800,
+                          ),
+                        ),
+                      ),
+                      if (isReject)
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade700,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'REJECT (BS)',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   if (summary.serialNumber != null && summary.serialNumber!.isNotEmpty)
                     Text(
@@ -271,6 +410,7 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
                 ],
               ),
             ),
+            SizedBox(width: 8),
             Text(
               'PCS',
               style: TextStyle(
@@ -466,7 +606,9 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
     );
   }
 
-  Widget _buildBarcodesSection() {
+  Widget _buildAcceptedBarcodesSection() {
+    if (_inbound!.details.isEmpty) return SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -474,127 +616,185 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
           padding: EdgeInsets.symmetric(horizontal: 4),
           child: Row(
             children: [
-              Icon(Icons.qr_code_scanner, size: 20, color: Colors.grey.shade700),
+              Icon(Icons.qr_code_scanner, size: 20, color: Colors.blue.shade700),
               SizedBox(width: 8),
               Text(
-                'Daftar Barcode (${_inbound!.totalItems})',
+                'Daftar Barcode (${_inbound!.details.length})',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade800,
+                  color: Colors.blue.shade800,
                 ),
               ),
             ],
           ),
         ),
-        
         SizedBox(height: 12),
-        
-        Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            itemCount: _inbound!.details.length,
-            separatorBuilder: (context, index) => Divider(height: 1, indent: 16, endIndent: 16),
-            itemBuilder: (context, index) {
-              final detail = _inbound!.details[index];
-              return ListTile(
-                leading: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.purple.shade100,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${index + 1}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.purple.shade700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
+        _buildBarcodeListCard(_inbound!.details, isReject: false, startIndex: 1),
+      ],
+    );
+  }
+
+  Widget _buildRejectedBarcodesSection() {
+    if (_inbound!.rejectedDetails.isEmpty) return SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              Icon(Icons.report_gmailerrorred, size: 20, color: Colors.red.shade700),
+              SizedBox(width: 8),
+              Text(
+                'Daftar Barcode Reject (${_inbound!.rejectedDetails.length})',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red.shade800,
                 ),
-                title: Text(
-                  detail.barcode,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade800,
-                  ),
-                ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (detail.model != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2.0),
-                        child: Text(
-                          '${detail.model} - ${detail.color} - ${detail.size}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                        ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.shade50,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.orange.shade200),
-                            ),
-                            child: Text(
-                              'Qty: ${detail.qty}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.orange.shade900,
-                              ),
-                            ),
-                          ),
-                          if (detail.rack != null) ...[
-                            SizedBox(width: 8),
-                            Container(
-                              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.shade50,
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: Colors.blue.shade200),
-                              ),
-                              child: Text(
-                                'Rak: ${detail.rack}',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade900,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                trailing: IconButton(
-                  icon: Icon(Icons.copy, size: 18, color: Colors.grey.shade600),
-                  onPressed: () => _copyBarcode(detail.barcode),
-                  tooltip: 'Salin barcode',
-                ),
-              );
-            },
+              ),
+            ],
           ),
         ),
+        SizedBox(height: 12),
+        _buildBarcodeListCard(_inbound!.rejectedDetails, isReject: true, startIndex: _inbound!.details.length + 1),
       ],
+    );
+  }
+
+  Widget _buildBarcodeListCard(List<InboundReceiveDetail> items, {required bool isReject, int startIndex = 1}) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: isReject ? Colors.red.shade100 : Colors.transparent),
+      ),
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: NeverScrollableScrollPhysics(),
+        itemCount: items.length,
+        separatorBuilder: (context, index) => Divider(height: 1, indent: 16, endIndent: 16),
+        itemBuilder: (context, index) {
+          final detail = items[index];
+          final displayIndex = startIndex + index;
+          
+          return ListTile(
+            leading: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: isReject ? Colors.red.shade100 : Colors.purple.shade100,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Center(
+                child: Text(
+                  '$displayIndex',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isReject ? Colors.red.shade700 : Colors.purple.shade700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    detail.barcode,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                ),
+                if (isReject)
+                  Container(
+                    margin: EdgeInsets.only(left: 8),
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade100,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.red.shade300),
+                    ),
+                    child: Text(
+                      'BS',
+                      style: TextStyle(
+                        color: Colors.red.shade900,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (detail.model != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2.0),
+                    child: Text(
+                      '${detail.model} - ${detail.color} - ${detail.size}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.orange.shade200),
+                        ),
+                        child: Text(
+                          'Qty: ${detail.qty}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade900,
+                          ),
+                        ),
+                      ),
+                      if (detail.rack != null && detail.rack!.isNotEmpty) ...[
+                        SizedBox(width: 8),
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Text(
+                            'Rak: ${detail.rack}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue.shade900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            trailing: IconButton(
+              icon: Icon(Icons.copy, size: 18, color: Colors.grey.shade600),
+              onPressed: () => _copyBarcode(detail.barcode),
+              tooltip: 'Salin barcode',
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -631,5 +831,30 @@ class _InboundDetailScreenState extends State<InboundDetailScreen> {
         ),
       ],
     );
+  }
+}
+
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  _SliverAppBarDelegate(this._tabBar);
+
+  final TabBar _tabBar;
+
+  @override
+  double get minExtent => _tabBar.preferredSize.height;
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Colors.grey.shade50,
+      child: _tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
+    return false;
   }
 }

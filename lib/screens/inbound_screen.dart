@@ -21,7 +21,8 @@ class InboundScreen extends StatefulWidget {
   State<InboundScreen> createState() => _InboundScreenState();
 }
 
-class _InboundScreenState extends State<InboundScreen> {
+class _InboundScreenState extends State<InboundScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   final MobileScannerController _scannerController = MobileScannerController(
     detectionSpeed: DetectionSpeed.normal,
   );
@@ -49,6 +50,10 @@ class _InboundScreenState extends State<InboundScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _loadWarehouses();
     _loadRacks();
   }
@@ -117,6 +122,7 @@ class _InboundScreenState extends State<InboundScreen> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     _scannerController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -215,7 +221,10 @@ class _InboundScreenState extends State<InboundScreen> {
           _isProcessingScan = true;
         });
 
-        _handleBarcodeScanned(code).then((_) {
+        // Use isReject based on active tab
+        final isReject = _tabController.index == 1;
+
+        _handleBarcodeScanned(code, isReject: isReject).then((_) {
           // Beri jeda 1 detik setelah proses selesai (atau setelah dialog ditutup)
           // agar tidak langsung spam scan barang berikutnya
           Future.delayed(const Duration(milliseconds: 1000), () {
@@ -233,7 +242,7 @@ class _InboundScreenState extends State<InboundScreen> {
     }
   }
 
-  Future<void> _handleBarcodeScanned(String barcode) async {
+  Future<void> _handleBarcodeScanned(String barcode, {required bool isReject}) async {
     try {
       // Trim whitespace
       final cleanedBarcode = barcode.trim();
@@ -245,7 +254,7 @@ class _InboundScreenState extends State<InboundScreen> {
       }
       
       // Debug: print barcode yang dibaca
-      print('Barcode scanned: $barcode');
+      print('Barcode scanned: $barcode (Reject: $isReject)');
       
       // Cek apakah barcode sudah pernah discan secara lokal
       if (_scannedBarcodes.any((b) => b.barcode == cleanedBarcode)) {
@@ -288,7 +297,11 @@ class _InboundScreenState extends State<InboundScreen> {
       final modelName = data['model']['name'];
       final colorName = data['color']['name'];
       final sizeCode = data['size']['code'];
-      final isDozen = data['is_dozen'] == true;
+      
+      // Pembeda piece dan dozen sekarang di index 5: D (dozen), P (piece)
+      // Tetap gunakan API response sebagai prioritas, tapi fallback ke parsing string jika perlu
+      final String barcodeTypeChar = parts[5].trim().toUpperCase();
+      final bool isDozen = data['is_dozen'] == true || barcodeTypeChar == 'D';
       
       final timestamp = parts[1].trim(); // Extract timestamp for local object construction if needed
 
@@ -306,6 +319,7 @@ class _InboundScreenState extends State<InboundScreen> {
           rak: cmtCode,
           qty: qty,
           requestId: 'REQ-$cmtCode-$timestamp',
+          isReject: isReject,
         ).markAsScanned();
 
         setState(() {
@@ -313,7 +327,7 @@ class _InboundScreenState extends State<InboundScreen> {
         });
 
         await SoundService().playSuccess();
-        Toast.show(context, '✅ ${barcodeProduct.typeLabel} terscan\n$modelName - $colorName');
+        Toast.show(context, '✅ ${barcodeProduct.typeLabel} ${isReject ? 'BS ' : ''}terscan\n$modelName - $colorName');
       } else {
         // Piece barcode - show rack selection dialog
         // 1. Play success alert indicating barcode is recognized
@@ -331,6 +345,7 @@ class _InboundScreenState extends State<InboundScreen> {
           cmtCode: cmtCode,
           qty: qty,
           timestamp: timestamp,
+          isReject: isReject,
         );
         
         // Start scanner again after dialog is closed
@@ -360,6 +375,7 @@ class _InboundScreenState extends State<InboundScreen> {
     required String cmtCode,
     required int qty,
     required String timestamp,
+    required bool isReject,
   }) async {
     final TextEditingController rackCodeController = TextEditingController();
     Timer? _debounce;
@@ -602,7 +618,7 @@ class _InboundScreenState extends State<InboundScreen> {
               child: Text('Batal', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-              onPressed: _validatedRackId == null || _isValidating
+              onPressed: (!isReject && (_validatedRackId == null || _isValidating)) || (isReject && _isValidating)
                   ? null
                   : () {
                       Navigator.pop(context);
@@ -619,6 +635,7 @@ class _InboundScreenState extends State<InboundScreen> {
                         rackCode: rackCodeController.text.trim(),
                         qty: qty,
                         requestId: 'REQ-$cmtCode-$timestamp',
+                        isReject: isReject,
                       ).markAsScanned();
 
                       setState(() {
@@ -626,16 +643,16 @@ class _InboundScreenState extends State<InboundScreen> {
                       });
 
                       SoundService().playSuccess();
-                      Toast.show(context, '✅ ${barcodeProduct.typeLabel} terscan');
+                      Toast.show(context, '✅ ${barcodeProduct.typeLabel} ${isReject ? 'BS ' : ''}terscan');
                     },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple.shade600,
+                backgroundColor: isReject ? Colors.red.shade600 : Colors.purple.shade600,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: Text('Simpan'),
+              child: Text(isReject && _validatedRackId == null ? 'Simpan (Tanpa Rak)' : 'Simpan'),
             ),
           ],
         ),
@@ -687,25 +704,33 @@ class _InboundScreenState extends State<InboundScreen> {
     // Separate dozen and piece barcodes
     final dozenBarcodes = _scannedBarcodes
         .where((b) => b.type == bp.BarcodeType.lusin)
-        .map((b) => b.barcode)
+        .map((b) => {
+          'barcode': b.barcode,
+          'is_reject': b.isReject,
+        })
         .toList();
     
     final pieceBarcodes = _scannedBarcodes
         .where((b) => b.type == bp.BarcodeType.satuan)
-        .map((b) => <String, String>{
+        .map((b) => {
           'barcode': b.barcode,
           'rack_id': b.rackId ?? '',
+          'is_reject': b.isReject,
         })
         .toList();
 
     // Check if dozen barcodes exist but no warehouse selected
-    if (dozenBarcodes.isNotEmpty && _selectedWarehouseId == null) {
+    if (dozenBarcodes.any((b) => b['is_reject'] == false) && _selectedWarehouseId == null) {
       Toast.show(context, 'Pilih warehouse terlebih dahulu untuk penerimaan dozen');
       return;
     }
 
-    // Check if piece barcodes exist but some don't have rack_id
-    final piecesWithoutRack = pieceBarcodes.where((p) => p['rack_id']?.isEmpty ?? true).length;
+    // Check if piece barcodes exist but some don't have rack_id (only for non-reject items)
+    final piecesWithoutRack = pieceBarcodes.where((p) {
+      final isReject = p['is_reject'] as bool? ?? false;
+      final rackId = p['rack_id'] as String? ?? '';
+      return !isReject && rackId.isEmpty;
+    }).length;
     if (piecesWithoutRack > 0) {
       Toast.show(context, '$piecesWithoutRack barcode piece belum divalidasi dengan id rak yang valid');
       return;
@@ -720,7 +745,7 @@ class _InboundScreenState extends State<InboundScreen> {
       final result = await InboundService.submitInbound(
         barcodesDozens: dozenBarcodes.isNotEmpty ? dozenBarcodes : null,
         barcodesPieces: pieceBarcodes.isNotEmpty ? pieceBarcodes : null,
-        warehouseId: dozenBarcodes.isNotEmpty ? _selectedWarehouseId : null,
+        warehouseId: dozenBarcodes.any((b) => b['is_reject'] == false) ? _selectedWarehouseId : null,
         notes: _notesController.text.trim(),
       );
 
@@ -977,16 +1002,30 @@ class _InboundScreenState extends State<InboundScreen> {
     );
   }
 
+  int get _totalBarcodes {
+    return _scannedBarcodes.length;
+  }
+
   int get _totalItems {
     return _scannedBarcodes.fold(0, (sum, barcode) => sum + barcode.qty);
   }
 
-  int get _totalLusin {
-    return _scannedBarcodes.where((b) => b.type == bp.BarcodeType.lusin).length;
+  int get _totalAcceptedLusin {
+    return _scannedBarcodes
+        .where((b) => !b.isReject && b.type == bp.BarcodeType.lusin)
+        .length;
   }
 
-  int get _totalSatuan {
-    return _scannedBarcodes.where((b) => b.type == bp.BarcodeType.satuan).length;
+  int get _totalAcceptedSatuan {
+    return _scannedBarcodes
+        .where((b) => !b.isReject && b.type == bp.BarcodeType.satuan)
+        .length;
+  }
+
+  int get _totalRejectQty {
+    return _scannedBarcodes
+        .where((b) => b.isReject)
+        .fold(0, (sum, barcode) => sum + barcode.qty);
   }
 
   @override
@@ -1001,7 +1040,8 @@ class _InboundScreenState extends State<InboundScreen> {
         }
       },
       child: Scaffold(
-      appBar: AppBar(
+        resizeToAvoidBottomInset: false,
+        appBar: AppBar(
         backgroundColor: Colors.blue.shade700,
         leading: Builder(
           builder: (context) => IconButton(
@@ -1037,10 +1077,29 @@ class _InboundScreenState extends State<InboundScreen> {
               tooltip: 'Hapus Semua',
             ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.blue.shade200,
+          tabs: [
+            Tab(
+              icon: Icon(Icons.check_circle_outline),
+              text: 'BISA DITERIMA',
+            ),
+            Tab(
+              icon: Icon(Icons.report_problem_outlined),
+              text: 'REJECT (BS)',
+            ),
+          ],
+        ),
       ),
       drawer: AppDrawer(
         onMenuSelected: (menu) => _handleMenuSelection(context, menu),
       ),
+      backgroundColor: _tabController.index == 1 
+          ? Colors.red.shade50 
+          : Colors.green.shade50,
       body: Column(
         children: [
           // Scanner Section with Floating Summary
@@ -1114,7 +1173,7 @@ class _InboundScreenState extends State<InboundScreen> {
                       children: [
                         _buildSummaryChip(
                           'Total',
-                          '${_scannedBarcodes.length}',
+                          '$_totalBarcodes',
                           Icons.qr_code_scanner,
                           Colors.blue,
                         ),
@@ -1126,15 +1185,21 @@ class _InboundScreenState extends State<InboundScreen> {
                         ),
                         _buildSummaryChip(
                           'Lusin',
-                          '$_totalLusin',
+                          '$_totalAcceptedLusin',
                           Icons.layers,
                           Colors.orange,
                         ),
                         _buildSummaryChip(
                           'Satuan',
-                          '$_totalSatuan',
+                          '$_totalAcceptedSatuan',
                           Icons.style,
                           Colors.purple,
+                        ),
+                        _buildSummaryChip(
+                          'Reject',
+                          '$_totalRejectQty',
+                          Icons.report_problem,
+                          Colors.red,
                         ),
                       ],
                     ),
@@ -1148,7 +1213,9 @@ class _InboundScreenState extends State<InboundScreen> {
           Expanded(
             flex: 3,
             child: Container(
-              color: Colors.grey.shade100,
+              // The outer container already has background from Scaffold, 
+              // but we might want a slightly distinct color for the list area if needed.
+              // For now, let's keep it transparent to show the Scaffold background.
               child: Column(
                 children: [
                   // List Header
@@ -1218,7 +1285,8 @@ class _InboundScreenState extends State<InboundScreen> {
                   
                   // Form Section
                   Container(
-                    color: Colors.white,
+                    // Semi-transparent white to show some background color
+                    color: Colors.white.withOpacity(0.9),
                     padding: EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1392,18 +1460,43 @@ class _InboundScreenState extends State<InboundScreen> {
           ),
           child: Icon(
             barcode.type == bp.BarcodeType.lusin ? Icons.layers : Icons.style,
-            color: barcode.type == bp.BarcodeType.lusin
-                ? Colors.orange.shade900
-                : Colors.purple.shade900,
+            color: barcode.isReject 
+                ? Colors.red.shade900
+                : (barcode.type == bp.BarcodeType.lusin
+                    ? Colors.orange.shade900
+                    : Colors.purple.shade900),
             size: 20,
           ),
         ),
-        title: Text(
-          barcode.displayName,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-          ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                barcode.displayName,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            if (barcode.isReject)
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade100,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.red.shade300),
+                ),
+                child: Text(
+                  'BS',
+                  style: TextStyle(
+                    color: Colors.red.shade900,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+          ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

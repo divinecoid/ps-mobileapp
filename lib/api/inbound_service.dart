@@ -45,16 +45,16 @@ class InboundService {
   /// Submit inbound receiving with separate arrays for dozen and piece barcodes
   /// 
   /// Parameters:
-  /// - barcodesDozens: List of barcode strings for dozen items
-  /// - barcodesPieces: List of objects containing barcode and rack_id for piece items
+  /// - barcodesDozens: List of objects containing barcode and is_reject for dozen items
+  /// - barcodesPieces: List of objects containing barcode, rack_id, and is_reject for piece items
   /// - warehouseId: UUID of the warehouse (required if barcodesDozens is not empty)
   /// - notes: Optional notes for the receiving
   /// 
   /// Returns:
   /// - Map containing success status, message, data, and errors
   static Future<Map<String, dynamic>> submitInbound({
-    List<String>? barcodesDozens,
-    List<Map<String, String>>? barcodesPieces,
+    List<Map<String, dynamic>>? barcodesDozens,
+    List<Map<String, dynamic>>? barcodesPieces,
     String? warehouseId,
     String? notes,
   }) async {

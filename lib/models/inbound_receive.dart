@@ -9,6 +9,7 @@ class InboundReceiveDetail {
   final String? size;
   final String? serialNumber;
   final int qty;
+  final bool isReject;
 
   InboundReceiveDetail({
     required this.barcode,
@@ -18,6 +19,7 @@ class InboundReceiveDetail {
     this.size,
     this.serialNumber,
     this.qty = 1,
+    this.isReject = false,
   });
 
   factory InboundReceiveDetail.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class InboundReceiveDetail {
       size: json['size'] as String?,
       serialNumber: json['serial_number'] as String?,
       qty: json['qty'] as int? ?? 1,
+      isReject: json['is_reject'] as bool? ?? false,
     );
   }
 }
@@ -40,6 +43,7 @@ class InboundSummary {
   final String? size;
   final String? serialNumber;
   final int totalQty;
+  final bool isReject;
 
   InboundSummary({
     this.model,
@@ -47,6 +51,7 @@ class InboundSummary {
     this.size,
     this.serialNumber,
     required this.totalQty,
+    this.isReject = false,
   });
 
   factory InboundSummary.fromJson(Map<String, dynamic> json) {
@@ -56,6 +61,7 @@ class InboundSummary {
       size: json['size'] as String?,
       serialNumber: json['serial_number'] as String?,
       totalQty: json['total_qty'] as int? ?? 0,
+      isReject: json['is_reject'] as bool? ?? false,
     );
   }
 
@@ -106,6 +112,7 @@ class InboundReceive {
   final String? notes;
   final CmtInfo? cmtInfo;
   final List<InboundReceiveDetail> details;
+  final List<InboundReceiveDetail> rejectedDetails;
   final List<InboundSummary> summary;
 
   InboundReceive({
@@ -117,6 +124,7 @@ class InboundReceive {
     this.notes,
     this.cmtInfo,
     required this.details,
+    this.rejectedDetails = const [],
     this.summary = const [],
   });
 
@@ -134,9 +142,15 @@ class InboundReceive {
     final cmtData = request?['cmt'] as Map<String, dynamic>?;
     final cmtInfo = cmtData != null ? CmtInfo.fromJson(cmtData) : null;
 
-    // Parse details
+    // Parse details (Accepted)
     final detailsList = json['details'] as List<dynamic>? ?? [];
     final details = detailsList
+        .map((detail) => InboundReceiveDetail.fromJson(detail as Map<String, dynamic>))
+        .toList();
+
+    // Parse rejected details
+    final rejectedDetailsList = json['rejected_details'] as List<dynamic>? ?? [];
+    final rejectedDetails = rejectedDetailsList
         .map((detail) => InboundReceiveDetail.fromJson(detail as Map<String, dynamic>))
         .toList();
 
@@ -155,6 +169,7 @@ class InboundReceive {
       notes: json['notes'] as String?,
       cmtInfo: cmtInfo,
       details: details,
+      rejectedDetails: rejectedDetails,
       summary: summary,
     );
   }
@@ -174,8 +189,8 @@ class InboundReceive {
     return DateFormat('HH:mm').format(receivedDate);
   }
 
-  /// Total items count
-  int get totalItems => details.length;
+  /// Total items count (excluding rejects in count, or total? usually total)
+  int get totalItems => details.length + rejectedDetails.length;
 
   /// CMT code untuk display
   String get cmtCode => cmtInfo?.code ?? '-';

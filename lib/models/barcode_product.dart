@@ -43,9 +43,12 @@ class BarcodeProduct {
   
   /// Waktu scan (null jika belum discan)
   final DateTime? scannedAt;
-  
+
   /// Request ID yang terkait dengan barcode ini
   final String? requestId;
+
+  /// Status apakah item ini reject (BS - Barang Rusak)
+  final bool isReject;
 
   BarcodeProduct({
     required this.barcode,
@@ -60,6 +63,7 @@ class BarcodeProduct {
     this.isScanned = false,
     this.scannedAt,
     this.requestId,
+    this.isReject = false,
   });
 
   /// Copy with method untuk update status scanned
@@ -76,6 +80,7 @@ class BarcodeProduct {
     bool? isScanned,
     DateTime? scannedAt,
     String? requestId,
+    bool? isReject,
   }) {
     return BarcodeProduct(
       barcode: barcode ?? this.barcode,
@@ -90,6 +95,7 @@ class BarcodeProduct {
       isScanned: isScanned ?? this.isScanned,
       scannedAt: scannedAt ?? this.scannedAt,
       requestId: requestId ?? this.requestId,
+      isReject: isReject ?? this.isReject,
     );
   }
 
@@ -139,6 +145,7 @@ class BarcodeProduct {
       'isScanned': isScanned,
       'scannedAt': scannedAt?.toIso8601String(),
       'requestId': requestId,
+      'isReject': isReject,
     };
   }
 
@@ -162,6 +169,7 @@ class BarcodeProduct {
           ? DateTime.parse(json['scannedAt'] as String)
           : null,
       requestId: json['requestId'] as String?,
+      isReject: json['isReject'] as bool? ?? false,
     );
   }
 
@@ -186,91 +194,28 @@ class BarcodeProduct {
 
 /*
 // Contoh 1: Barcode Lusin untuk Size S (mewakili 12 item)
-// Semua size S, M, L untuk warna Merah akan ditaruh di Rak A yang sama
+// Format baru: CMT|TIMESTAMP|MODEL|COLOR|SIZE|TYPE|SEQ
 final barcodeLusin1 = BarcodeProduct(
-  barcode: 'LPK-MERAH-S-RAK01-001-LUSIN',
+  barcode: 'CMT01|20260116173826|LP|RED|S|D|1',
   type: BarcodeType.lusin,
-  model: 'LENGAN PANJANG KERAH',
-  warna: 'Merah',
+  model: 'LENGAN PANJANG',
+  warna: 'Red',
   size: 'S',
   rak: 'RAK01', // Rak yang dipilih saat request
   qty: 12, // 1 lusin = 12 item
-  requestId: 'REQ-2024-001',
+  requestId: 'REQ-CMT01-20260116173826',
 );
 
-// Contoh 2: Barcode Lusin kedua untuk Size S (mewakili 12 item)
-final barcodeLusin2 = BarcodeProduct(
-  barcode: 'LPK-MERAH-S-RAK01-002-LUSIN',
-  type: BarcodeType.lusin,
-  model: 'LENGAN PANJANG KERAH',
-  warna: 'Merah',
-  size: 'S',
-  rak: 'RAK01',
-  qty: 12,
-  requestId: 'REQ-2024-001',
-);
-
-// Contoh 3: Barcode Satuan untuk Size S (mewakili 1 item sisa)
-// Total Size S = 5, jadi hanya 1 barcode satuan (5 - 0 = 5, tidak cukup untuk lusin)
+// Contoh 2: Barcode Satuan untuk Size S
 final barcodeSatuanS = BarcodeProduct(
-  barcode: 'LPK-MERAH-S-RAK01-001-PCS',
+  barcode: 'CMT01|20260116173826|LP|RED|S|P|1',
   type: BarcodeType.satuan,
-  model: 'LENGAN PANJANG KERAH',
-  warna: 'Merah',
+  model: 'LENGAN PANJANG',
+  warna: 'Red',
   size: 'S',
   rak: 'RAK01',
   qty: 1, // 1 satuan = 1 item
-  requestId: 'REQ-2024-001',
-);
-
-// Contoh 4: Barcode untuk Size M (jumlahnya 7)
-// Karena 7 < 12, jadi tidak ada lusin, hanya barcode satuan
-final barcodeSatuanM1 = BarcodeProduct(
-  barcode: 'LPK-MERAH-M-RAK01-001-PCS',
-  type: BarcodeType.satuan,
-  model: 'LENGAN PANJANG KERAH',
-  warna: 'Merah',
-  size: 'M',
-  rak: 'RAK01', // Warna Merah dengan berbagai size tetap di Rak yang sama
-  qty: 1,
-  requestId: 'REQ-2024-001',
-);
-
-// Contoh 5: Barcode untuk Size L (jumlahnya 13)
-// 13 = 1 lusin (12) + 1 satuan (1)
-final barcodeLusinL = BarcodeProduct(
-  barcode: 'LPK-MERAH-L-RAK01-001-LUSIN',
-  type: BarcodeType.lusin,
-  model: 'LENGAN PANJANG KERAH',
-  warna: 'Merah',
-  size: 'L',
-  rak: 'RAK01',
-  qty: 12,
-  requestId: 'REQ-2024-001',
-);
-
-final barcodeSatuanL = BarcodeProduct(
-  barcode: 'LPK-MERAH-L-RAK01-001-PCS',
-  type: BarcodeType.satuan,
-  model: 'LENGAN PANJANG KERAH',
-  warna: 'Merah',
-  size: 'L',
-  rak: 'RAK01',
-  qty: 1,
-  requestId: 'REQ-2024-001',
-);
-
-// Contoh 6: Jika warna Merah punya 2 rak (RAK A dan RAK B)
-// User bisa pilih rak saat request, misalnya pilih RAK B
-final barcodeLusinRakB = BarcodeProduct(
-  barcode: 'LPK-MERAH-S-RAKB-001-LUSIN',
-  type: BarcodeType.lusin,
-  model: 'LENGAN PANJANG KERAH',
-  warna: 'Merah',
-  size: 'S',
-  rak: 'RAK B', // Rak berbeda yang dipilih
-  qty: 12,
-  requestId: 'REQ-2024-002',
+  requestId: 'REQ-CMT01-20260116173826',
 );
 
 // Contoh penggunaan:
