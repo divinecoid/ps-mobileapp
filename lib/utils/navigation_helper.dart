@@ -7,6 +7,7 @@ import '../screens/inbound_screen.dart';
 import '../screens/reject_screen.dart';
 import '../screens/mutation_screen.dart';
 import '../screens/login_screen.dart';
+import '../screens/bluetooth_pairing_screen.dart';
 import '../state/auth_provider.dart';
 import 'package:provider/provider.dart';
 import '../components/toast.dart';
@@ -91,6 +92,15 @@ class NavigationHelper {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => MutationScreen()),
+          );
+        }
+        return true;
+
+      case 'bluetooth_printer':
+        if (currentScreen != 'bluetooth_printer') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const BluetoothPairingScreen()),
           );
         }
         return true;

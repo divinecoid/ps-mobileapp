@@ -231,4 +231,39 @@ class InboundService {
       };
     }
   }
+
+  /// Generate next piece barcode by scanning any existing barcode of the product
+  static Future<Map<String, dynamic>> generateNextBarcode(String barcode) async {
+    try {
+      final response = await ApiClient.dio.post(
+        '/inbound/generate-next',
+        data: {
+          'barcode': barcode,
+        },
+      );
+
+      return {
+        'success': true,
+        'data': response.data['data'],
+        'message': response.data['message'],
+      };
+    } on DioException catch (e) {
+      if (e.response != null) {
+        final responseData = e.response!.data;
+        return {
+          'success': false,
+          'message': responseData['message'] ?? 'Gagal generate barcode',
+        };
+      }
+      return {
+        'success': false,
+        'message': 'Network error: ${e.message}',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Unexpected error: $e',
+      };
+    }
+  }
 }

@@ -13,6 +13,8 @@ import 'dart:async';
 import 'inbound_list_screen.dart';
 import 'barcode_scanner_screen.dart';
 import 'dart:convert';
+import '../utils/printer_service.dart';
+import 'package:intl/intl.dart' as intl;
 
 class InboundScreen extends StatefulWidget {
   const InboundScreen({super.key});
@@ -29,6 +31,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
   
   bool _isProcessingScan = false;
   List<bp.BarcodeProduct> _scannedBarcodes = [];
+  List<bp.BarcodeProduct> _generatedBarcodes = [];
   bool _isListExpanded = true;
   bool _isSubmitting = false;
   bool _isLoadingWarehouses = true;
@@ -50,7 +53,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -204,6 +207,139 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
     );
   }
 
+  Future<void> _handleGenerateBarcode(String barcode) async {
+    try {
+      final result = await InboundService.generateNextBarcode(barcode);
+
+      if (result['success']) {
+        final data = result['data'];
+        final String newBarcodeStr = data['barcode'];
+        final parts = newBarcodeStr.split('|');
+        
+        final newBarcode = bp.BarcodeProduct(
+          barcode: newBarcodeStr,
+          type: bp.BarcodeType.satuan,
+          model: data['model'] ?? (parts.length > 2 ? parts[2] : 'UNKNOWN'),
+          warna: data['color'] ?? (parts.length > 3 ? parts[3] : 'UNKNOWN'),
+          size: data['size'] ?? (parts.length > 4 ? parts[4] : 'UNKNOWN'),
+          rak: '', // Rak can be empty for generated
+          qty: 1,
+          isScanned: true,
+          scannedAt: DateTime.now(),
+        );
+
+        setState(() {
+          // Add to the TOP of the list
+          _generatedBarcodes.insert(0, newBarcode);
+        });
+
+        SoundService().playSuccess();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Barcode Baru: ${data['barcode']}'),
+              backgroundColor: Colors.green,
+              action: SnackBarAction(
+                label: 'PRINT',
+                textColor: Colors.white,
+                onPressed: () => _printBarcode(newBarcode),
+              ),
+            ),
+          );
+        }
+      } else {
+        SoundService().playError();
+        _showErrorDialog(result['message'], null);
+      }
+    } catch (e) {
+      SoundService().playError();
+      _showErrorDialog('Terjadi kesalahan: $e', null);
+    }
+  }
+
+  Future<void> _printBarcode(bp.BarcodeProduct barcode) async {
+    final printer = PrinterService();
+    if (!(await printer.isConnected())) {
+      final devices = await printer.getDevices();
+      if (devices.isEmpty) {
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Tidak ada printer Bluetooth terdeteksi')),
+          );
+        }
+        return;
+      }
+      
+      // For simplicity, connect to the first bonded device if not connected
+      await printer.connect(devices.first);
+    }
+    
+    await printer.printBarcode(
+      barcode.barcode,
+      model: barcode.model,
+      color: barcode.warna,
+      size: barcode.size,
+    );
+  }
+
+  Future<void> _printAllGenerated() async {
+    if (_generatedBarcodes.isEmpty) return;
+    
+    final printer = PrinterService();
+    if (!(await printer.isConnected())) {
+      final devices = await printer.getDevices();
+      if (devices.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Tidak ada printer Bluetooth terdeteksi')),
+          );
+        }
+        return;
+      }
+      await printer.connect(devices.first);
+    }
+
+    final itemsToPrint = _generatedBarcodes.map((b) => {
+      'barcode': b.barcode,
+      'model': b.model,
+      'color': b.warna,
+      'size': b.size,
+    }).toList();
+
+    await printer.printBatch(itemsToPrint);
+  }
+
+  Widget _buildGeneratedBarcodeCard(bp.BarcodeProduct barcode) {
+    return Card(
+      margin: EdgeInsets.only(bottom: 8),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        title: Text(
+          barcode.barcode,
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(height: 4),
+            Text('${barcode.model} - ${barcode.warna} - ${barcode.size}'),
+            Text(
+              'Dihasilkan: ${intl.DateFormat('HH:mm:ss').format(barcode.scannedAt!)}',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        trailing: IconButton(
+          icon: Icon(Icons.print, color: Colors.blue),
+          onPressed: () => _printBarcode(barcode),
+        ),
+      ),
+    );
+  }
+
   void _onDetect(BarcodeCapture capture) {
     if (_isProcessingScan) return;
 
@@ -221,20 +357,23 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
           _isProcessingScan = true;
         });
 
-        // Use isReject based on active tab
-        final isReject = _tabController.index == 1;
-
-        _handleBarcodeScanned(code, isReject: isReject).then((_) {
-          // Beri jeda 1 detik setelah proses selesai (atau setelah dialog ditutup)
-          // agar tidak langsung spam scan barang berikutnya
-          Future.delayed(const Duration(milliseconds: 1000), () {
-            if (mounted) {
-              setState(() {
-                _isProcessingScan = false;
-              });
-            }
+        // Branch based on active tab
+        if (_tabController.index == 2) {
+          // Tab Lebihan: Generate next barcode
+          _handleGenerateBarcode(code).then((_) {
+            Future.delayed(const Duration(milliseconds: 1000), () {
+              if (mounted) setState(() => _isProcessingScan = false);
+            });
           });
-        });
+        } else {
+          // Tab Diterima/Reject: Normal validation
+          final isReject = _tabController.index == 1;
+          _handleBarcodeScanned(code, isReject: isReject).then((_) {
+            Future.delayed(const Duration(milliseconds: 1000), () {
+              if (mounted) setState(() => _isProcessingScan = false);
+            });
+          });
+        }
         
         // Only process first barcode frame to avoid duplicate racing
         break;
@@ -1091,15 +1230,21 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
               icon: Icon(Icons.report_problem_outlined),
               text: 'REJECT (BS)',
             ),
+            Tab(
+              icon: Icon(Icons.add_circle_outline),
+              text: 'LEBIHAN',
+            ),
           ],
         ),
       ),
       drawer: AppDrawer(
         onMenuSelected: (menu) => _handleMenuSelection(context, menu),
       ),
-      backgroundColor: _tabController.index == 1 
-          ? Colors.red.shade50 
-          : Colors.green.shade50,
+      backgroundColor: _tabController.index == 2
+          ? Colors.orange.shade50
+          : _tabController.index == 1
+              ? Colors.red.shade50
+              : Colors.green.shade50,
       body: Column(
         children: [
           // Scanner Section with Floating Summary
@@ -1238,7 +1383,9 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                           ),
                           SizedBox(width: 8),
                           Text(
-                            'Barcode Ter-scan (${_scannedBarcodes.length})',
+                            _tabController.index == 2
+                                ? 'Barcode Baru (${_generatedBarcodes.length})'
+                                : 'Barcode Ter-scan (${_scannedBarcodes.length})',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -1275,132 +1422,183 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                             )
                           : ListView.builder(
                               padding: EdgeInsets.all(8),
-                              itemCount: _scannedBarcodes.length,
+                              itemCount: _tabController.index == 2 
+                                  ? _generatedBarcodes.length 
+                                  : _scannedBarcodes.length,
                               itemBuilder: (context, index) {
+                                if (_tabController.index == 2) {
+                                  final barcode = _generatedBarcodes[index];
+                                  return _buildGeneratedBarcodeCard(barcode);
+                                }
                                 final barcode = _scannedBarcodes[index];
                                 return _buildBarcodeCard(barcode);
                               },
                             ),
                     ),
                   
-                  // Form Section
-                  Container(
-                    // Semi-transparent white to show some background color
-                    color: Colors.white.withOpacity(0.9),
-                    padding: EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Warehouse Dropdown
-                        Text(
-                          'Warehouse',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                  // Form Section - Only show for tab 0 and 1
+                  if (_tabController.index != 2)
+                    Container(
+                      // Semi-transparent white to show some background color
+                      color: Colors.white.withOpacity(0.9),
+                      padding: EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Warehouse Dropdown
+                          Text(
+                            'Warehouse',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 8),
-                        _isLoadingWarehouses
-                            ? Container(
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                                child: Row(
-                                  children: [
-                                    SizedBox(
+                          SizedBox(height: 8),
+                          _isLoadingWarehouses
+                              ? Container(
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      ),
+                                      SizedBox(width: 12),
+                                      Text('Memuat warehouse...'),
+                                    ],
+                                  ),
+                                )
+                              : _warehouseLoadError || _warehouses.isEmpty
+                                  ? Container(
+                                      padding: EdgeInsets.symmetric(vertical: 8),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.error_outline, color: Colors.red, size: 20),
+                                          SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'Gagal memuat warehouse',
+                                              style: TextStyle(color: Colors.red),
+                                            ),
+                                          ),
+                                          TextButton.icon(
+                                            onPressed: _loadWarehouses,
+                                            icon: Icon(Icons.refresh, size: 18),
+                                            label: Text('Retry'),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : DropdownButtonFormField<String>(
+                                      value: _selectedWarehouseId,
+                                      decoration: InputDecoration(
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 12,
+                                        ),
+                                        isDense: true,
+                                      ),
+                                      items: _warehouses.map((warehouse) {
+                                        return DropdownMenuItem<String>(
+                                          value: warehouse.id,
+                                          child: Text(warehouse.displayName),
+                                        );
+                                      }).toList(),
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _selectedWarehouseId = value;
+                                        });
+                                      },
+                                    ),
+                          
+                          SizedBox(height: 16),
+                          
+                          // Submit Button
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: _isSubmitting ? null : _submitInbound,
+                              icon: _isSubmitting
+                                  ? SizedBox(
                                       width: 20,
                                       height: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    ),
-                                    SizedBox(width: 12),
-                                    Text('Memuat warehouse...'),
-                                  ],
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                            Colors.white),
+                                      ),
+                                    )
+                                  : Icon(Icons.send, size: 20),
+                              label: Text(_isSubmitting ? 'Memproses...' : 'Submit Inbound'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green.shade600,
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                textStyle: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                              )
-                            : _warehouseLoadError || _warehouses.isEmpty
-                                ? Container(
-                                    padding: EdgeInsets.symmetric(vertical: 8),
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.error_outline, color: Colors.red, size: 20),
-                                        SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            'Gagal memuat warehouse',
-                                            style: TextStyle(color: Colors.red),
-                                          ),
-                                        ),
-                                        TextButton.icon(
-                                          onPressed: _loadWarehouses,
-                                          icon: Icon(Icons.refresh, size: 18),
-                                          label: Text('Retry'),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : DropdownButtonFormField<String>(
-                                    value: _selectedWarehouseId,
-                                    decoration: InputDecoration(
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 12,
-                                      ),
-                                      isDense: true,
-                                    ),
-                                    items: _warehouses.map((warehouse) {
-                                      return DropdownMenuItem<String>(
-                                        value: warehouse.id,
-                                        child: Text(warehouse.displayName),
-                                      );
-                                    }).toList(),
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _selectedWarehouseId = value;
-                                      });
-                                    },
-                                  ),
-                        
-                        SizedBox(height: 16),
-                        
-                        // Submit Button
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _isSubmitting ? null : _submitInbound,
-                            icon: _isSubmitting
-                                ? SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                          Colors.white),
-                                    ),
-                                  )
-                                : Icon(Icons.send, size: 20),
-                            label: Text(_isSubmitting ? 'Memproses...' : 'Submit Inbound'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green.shade600,
-                              foregroundColor: Colors.white,
-                              padding: EdgeInsets.symmetric(vertical: 16),
-                              textStyle: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        
-                        // Bottom spacing for navigation bar
-                        SizedBox(height: 48),
-                      ],
+                          
+                          // Bottom spacing for navigation bar
+                          SizedBox(height: 48),
+                        ],
+                      ),
                     ),
-                  ),
+                  
+                  // Lebihan Actions - Only show for tab 2
+                  if (_tabController.index == 2 && _generatedBarcodes.isNotEmpty)
+                    Container(
+                      color: Colors.white.withOpacity(0.9),
+                      padding: EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () => _printAllGenerated(),
+                                  icon: Icon(Icons.print),
+                                  label: Text('Print All (${_generatedBarcodes.length})'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue.shade600,
+                                    foregroundColor: Colors.white,
+                                    padding: EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                   setState(() {
+                                      _generatedBarcodes.clear();
+                                   });
+                                },
+                                icon: Icon(Icons.clear_all),
+                                label: Text('Clear'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red.shade600,
+                                  side: BorderSide(color: Colors.red.shade300),
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 48),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),

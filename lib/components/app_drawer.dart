@@ -312,6 +312,16 @@ class _AppDrawerState extends State<AppDrawer> {
                             onTap: () => _handleMenuTap('reject'),
                           ),
                         ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: _buildScanSubmenuItem(
+                            title: 'Printer Bluetooth',
+                            icon: Icons.print,
+                            color: Colors.purple.shade50,
+                            iconColor: Colors.purple.shade700,
+                            onTap: () => _handleMenuTap('bluetooth_printer'),
+                          ),
+                        ),
                       ],
                     ),
                   )

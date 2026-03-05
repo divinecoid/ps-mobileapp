@@ -40,6 +40,8 @@ dependencies:
   fl_chart: ^0.69.0
   audioplayers: ^6.1.0
   intl: ^0.19.0
+  blue_thermal_printer: ^1.2.3
+  esc_pos_utils_plus: ^2.0.3
 
 flutter_launcher_icons:
   android: true
