@@ -42,30 +42,33 @@ class InboundService {
     }
   }
 
-  /// Submit inbound receiving with separate arrays for dozen and piece barcodes
+  /// Submit inbound receiving with separate arrays for dozen, piece, and rejected barcodes
   /// 
   /// Parameters:
-  /// - barcodesDozens: List of objects containing barcode and is_reject for dozen items
-  /// - barcodesPieces: List of objects containing barcode, rack_id, and is_reject for piece items
+  /// - barcodesDozens: List of barcode strings for dozen items
+  /// - barcodesPieces: List of objects containing barcode and rack_id for piece items
+  /// - barcodesRejected: List of barcode strings for rejected/BS items
   /// - warehouseId: UUID of the warehouse (required if barcodesDozens is not empty)
   /// - notes: Optional notes for the receiving
   /// 
   /// Returns:
   /// - Map containing success status, message, data, and errors
   static Future<Map<String, dynamic>> submitInbound({
-    List<Map<String, dynamic>>? barcodesDozens,
+    List<String>? barcodesDozens,
     List<Map<String, dynamic>>? barcodesPieces,
+    List<String>? barcodesRejected,
     String? warehouseId,
     String? notes,
   }) async {
     // Validate that at least one of barcodes arrays is provided
     final hasDozen = barcodesDozens != null && barcodesDozens.isNotEmpty;
     final hasPiece = barcodesPieces != null && barcodesPieces.isNotEmpty;
+    final hasRejected = barcodesRejected != null && barcodesRejected.isNotEmpty;
     
-    if (!hasDozen && !hasPiece) {
+    if (!hasDozen && !hasPiece && !hasRejected) {
       return {
         'success': false,
-        'message': 'Minimal salah satu dari barcodes_dozen atau barcodes_piece harus diisi',
+        'message': 'Minimal salah satu dari barcodes_dozen, barcodes_piece, atau barcodes_rejected harus diisi',
         'data': null,
         'errors': [],
       };
@@ -91,6 +94,10 @@ class InboundService {
       
       if (hasPiece) {
         requestData['barcodes_piece'] = barcodesPieces;
+      }
+      
+      if (hasRejected) {
+        requestData['barcodes_rejected'] = barcodesRejected;
       }
       
       // Always send notes, even if empty (backend might expect it)
@@ -168,7 +175,7 @@ class InboundService {
         '/inbound',
         queryParameters: {
           'page': page,
-          'limit': limit,
+          'per_page': limit,
           if (search != null) 'search': search,
         },
       );

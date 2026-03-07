@@ -37,7 +37,7 @@ class _InboundListScreenState extends State<InboundListScreen> {
       if (result['success'] == true) {
         final List<dynamic> data = result['data'] ?? [];
         final inbounds = data
-            .map((json) => InboundReceive.fromJson(json as Map<String, dynamic>))
+            .map((json) => InboundReceive.fromListJson(json as Map<String, dynamic>))
             .toList();
         
         if (mounted) {

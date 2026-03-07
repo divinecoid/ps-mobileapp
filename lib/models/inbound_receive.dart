@@ -114,6 +114,8 @@ class InboundReceive {
   final List<InboundReceiveDetail> details;
   final List<InboundReceiveDetail> rejectedDetails;
   final List<InboundSummary> summary;
+  /// Total items from API (used by index/list endpoint)
+  final int? totalItemsFromApi;
 
   InboundReceive({
     required this.id,
@@ -126,6 +128,7 @@ class InboundReceive {
     required this.details,
     this.rejectedDetails = const [],
     this.summary = const [],
+    this.totalItemsFromApi,
   });
 
   factory InboundReceive.fromJson(Map<String, dynamic> json) {
@@ -142,14 +145,30 @@ class InboundReceive {
     final cmtData = request?['cmt'] as Map<String, dynamic>?;
     final cmtInfo = cmtData != null ? CmtInfo.fromJson(cmtData) : null;
 
-    // Parse details (Accepted)
-    final detailsList = json['details'] as List<dynamic>? ?? [];
+    // Parse details (Accepted) — handle both List and Map from backend
+    final detailsRaw = json['details'];
+    final List<dynamic> detailsList;
+    if (detailsRaw is List) {
+      detailsList = detailsRaw;
+    } else if (detailsRaw is Map) {
+      detailsList = detailsRaw.values.toList();
+    } else {
+      detailsList = [];
+    }
     final details = detailsList
         .map((detail) => InboundReceiveDetail.fromJson(detail as Map<String, dynamic>))
         .toList();
 
-    // Parse rejected details
-    final rejectedDetailsList = json['rejected_details'] as List<dynamic>? ?? [];
+    // Parse rejected details — handle both List and Map from backend
+    final rejectedRaw = json['rejected_details'];
+    final List<dynamic> rejectedDetailsList;
+    if (rejectedRaw is List) {
+      rejectedDetailsList = rejectedRaw;
+    } else if (rejectedRaw is Map) {
+      rejectedDetailsList = rejectedRaw.values.toList();
+    } else {
+      rejectedDetailsList = [];
+    }
     final rejectedDetails = rejectedDetailsList
         .map((detail) => InboundReceiveDetail.fromJson(detail as Map<String, dynamic>))
         .toList();
@@ -174,6 +193,23 @@ class InboundReceive {
     );
   }
 
+  /// Factory constructor for Index (list) endpoint response
+  /// The list endpoint returns simpler structure with flat cmt, name, and items
+  factory InboundReceive.fromListJson(Map<String, dynamic> json) {
+    // Parse flat CMT object (not nested in request)
+    final cmtData = json['cmt'] as Map<String, dynamic>?;
+    final cmtInfo = cmtData != null ? CmtInfo.fromJson(cmtData) : null;
+
+    return InboundReceive(
+      id: json['id'] as String,
+      userName: json['name'] as String? ?? 'Unknown',
+      receivedDate: DateTime.parse(json['received_date'] as String),
+      cmtInfo: cmtInfo,
+      totalItemsFromApi: json['items'] as int? ?? 0,
+      details: [],
+    );
+  }
+
   /// Format tanggal untuk display (e.g., "24 Jan 2026, 10:30")
   String get formattedDate {
     return DateFormat('dd MMM yyyy, HH:mm').format(receivedDate);
@@ -189,8 +225,8 @@ class InboundReceive {
     return DateFormat('HH:mm').format(receivedDate);
   }
 
-  /// Total items count (excluding rejects in count, or total? usually total)
-  int get totalItems => details.length + rejectedDetails.length;
+  /// Total items count — uses API value if available, otherwise computes from details
+  int get totalItems => totalItemsFromApi ?? (details.length + rejectedDetails.length);
 
   /// CMT code untuk display
   String get cmtCode => cmtInfo?.code ?? '-';

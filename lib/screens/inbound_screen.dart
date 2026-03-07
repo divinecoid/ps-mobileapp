@@ -840,35 +840,38 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
       return;
     }
 
-    // Separate dozen and piece barcodes
+    // Separate into 3 arrays per API spec:
+    // 1. barcodes_dozen: non-rejected lusin barcodes (string[])
     final dozenBarcodes = _scannedBarcodes
-        .where((b) => b.type == bp.BarcodeType.lusin)
-        .map((b) => {
-          'barcode': b.barcode,
-          'is_reject': b.isReject,
-        })
+        .where((b) => b.type == bp.BarcodeType.lusin && !b.isReject)
+        .map((b) => b.barcode)
         .toList();
     
+    // 2. barcodes_piece: non-rejected piece barcodes ({barcode, rack_id}[])
     final pieceBarcodes = _scannedBarcodes
-        .where((b) => b.type == bp.BarcodeType.satuan)
-        .map((b) => {
+        .where((b) => b.type == bp.BarcodeType.satuan && !b.isReject)
+        .map((b) => <String, dynamic>{
           'barcode': b.barcode,
           'rack_id': b.rackId ?? '',
-          'is_reject': b.isReject,
         })
         .toList();
 
+    // 3. barcodes_rejected: all rejected barcodes (string[])
+    final rejectedBarcodes = _scannedBarcodes
+        .where((b) => b.isReject)
+        .map((b) => b.barcode)
+        .toList();
+
     // Check if dozen barcodes exist but no warehouse selected
-    if (dozenBarcodes.any((b) => b['is_reject'] == false) && _selectedWarehouseId == null) {
+    if (dozenBarcodes.isNotEmpty && _selectedWarehouseId == null) {
       Toast.show(context, 'Pilih warehouse terlebih dahulu untuk penerimaan dozen');
       return;
     }
 
-    // Check if piece barcodes exist but some don't have rack_id (only for non-reject items)
+    // Check if piece barcodes exist but some don't have rack_id
     final piecesWithoutRack = pieceBarcodes.where((p) {
-      final isReject = p['is_reject'] as bool? ?? false;
       final rackId = p['rack_id'] as String? ?? '';
-      return !isReject && rackId.isEmpty;
+      return rackId.isEmpty;
     }).length;
     if (piecesWithoutRack > 0) {
       Toast.show(context, '$piecesWithoutRack barcode piece belum divalidasi dengan id rak yang valid');
@@ -880,11 +883,12 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
     });
 
     try {
-      // Call API with new format
+      // Call API with separate arrays
       final result = await InboundService.submitInbound(
         barcodesDozens: dozenBarcodes.isNotEmpty ? dozenBarcodes : null,
         barcodesPieces: pieceBarcodes.isNotEmpty ? pieceBarcodes : null,
-        warehouseId: dozenBarcodes.any((b) => b['is_reject'] == false) ? _selectedWarehouseId : null,
+        barcodesRejected: rejectedBarcodes.isNotEmpty ? rejectedBarcodes : null,
+        warehouseId: dozenBarcodes.isNotEmpty ? _selectedWarehouseId : null,
         notes: _notesController.text.trim(),
       );
 
