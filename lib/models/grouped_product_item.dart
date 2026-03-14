@@ -5,6 +5,7 @@ class GroupedProductItem {
   final String displayName; // e.g., "LP - RED - 2XL"
   final int requiredQuantity;
   final List<String> scannedBarcodes;
+  final List<String> orderItemIds; // Store backend IDs for each item in this group
   final bool isComplete;
 
   GroupedProductItem({
@@ -14,6 +15,7 @@ class GroupedProductItem {
     required this.displayName,
     required this.requiredQuantity,
     required this.scannedBarcodes,
+    required this.orderItemIds,
     required this.isComplete,
   });
 
@@ -25,6 +27,7 @@ class GroupedProductItem {
     String? displayName,
     int? requiredQuantity,
     List<String>? scannedBarcodes,
+    List<String>? orderItemIds,
     bool? isComplete,
   }) {
     return GroupedProductItem(
@@ -34,6 +37,7 @@ class GroupedProductItem {
       displayName: displayName ?? this.displayName,
       requiredQuantity: requiredQuantity ?? this.requiredQuantity,
       scannedBarcodes: scannedBarcodes ?? this.scannedBarcodes,
+      orderItemIds: orderItemIds ?? this.orderItemIds,
       isComplete: isComplete ?? this.isComplete,
     );
   }

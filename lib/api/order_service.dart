@@ -98,7 +98,7 @@ class OrderService {
   static Future<Map<String, dynamic>> submitPreparation({
     required String orderId,
     required String preparedAt,
-    required List<String> scannedBarcodes,
+    required List<Map<String, dynamic>> orderItems,
   }) async {
     try {
       final response = await ApiClient.dio.post(
@@ -106,7 +106,7 @@ class OrderService {
         data: {
           'order_id': orderId,
           'prepared_at': preparedAt,
-          'scanned_barcodes': scannedBarcodes,
+          'order_items': orderItems,
         },
       );
 

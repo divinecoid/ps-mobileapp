@@ -50,3 +50,5 @@ app.*.map.json
 
 # Environment files
 .env
+
+/documentations/*

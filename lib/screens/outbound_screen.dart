@@ -182,6 +182,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
             final existing = groupedMap[key]!;
             groupedMap[key] = existing.copyWith(
               requiredQuantity: existing.requiredQuantity + 1,
+              orderItemIds: [...existing.orderItemIds, (item['id'] ?? '').toString()],
             );
           } else {
             // Create new group
@@ -194,6 +195,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   : 'Unknown Item',
               requiredQuantity: 1,
               scannedBarcodes: [],
+              orderItemIds: [(item['id'] ?? '').toString()],
               isComplete: false,
             );
           }
@@ -278,10 +280,19 @@ class _OutboundScreenState extends State<OutboundScreen> {
       return;
     }
 
-    // Collect all scanned barcodes
-    final List<String> allScannedBarcodes = [];
+    // Collect scanned barcodes mapping to order item IDs
+    // Since item order matters for mapping, we assign 1 scanned barcode to 1 orderItemId
+    final List<Map<String, dynamic>> orderItemsPayload = [];
     for (var group in _groupedProducts) {
-      allScannedBarcodes.addAll(group.scannedBarcodes);
+      // In theory group.scannedBarcodes.length == group.orderItemIds.length if isComplete
+      for (int i = 0; i < group.scannedBarcodes.length; i++) {
+        if (i < group.orderItemIds.length) {
+          orderItemsPayload.add({
+            'id': group.orderItemIds[i],
+            'scanned_barcodes': [group.scannedBarcodes[i]]
+          });
+        }
+      }
     }
 
     if (_orderData == null || _preparedAt == null) {
@@ -298,7 +309,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
       final response = await OrderService.submitPreparation(
         orderId: _orderData!['id'],
         preparedAt: _preparedAt!,
-        scannedBarcodes: allScannedBarcodes,
+        orderItems: orderItemsPayload,
       );
 
       if (!mounted) return;
