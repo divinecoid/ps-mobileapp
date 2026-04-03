@@ -38,6 +38,7 @@ class Endpoint {
 
   // CHECKER
   static const checkerAssignedOrders = '/checker/assigned-orders';
+  static const checkerSearchBySerial = '/checker/search-by-serial';
   static const checkerOrderItems = '/checker/order-items';
   static const checkerValidateProductBarcode =
       '/checker/validate-product-barcode';

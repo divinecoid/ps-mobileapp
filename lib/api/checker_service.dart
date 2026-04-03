@@ -30,6 +30,43 @@ class CheckerService {
     }
   }
 
+  /// GET /checker/search → Search orders by AWB, Serial, or Customer name
+  ///
+  /// Parameters:
+  /// - search: Search query (AWB code, Serial Number, or Customer name)
+  /// - marketplaceId: Filter by marketplace ID (optional)
+  /// - perPage: Number of items per page (default: 15)
+  /// - page: Page number (default: 1)
+  ///
+  /// Returns:
+  /// - Map containing paginated search results
+  static Future<Map<String, dynamic>> searchOrders({
+    required String search,
+    String? marketplaceId,
+    int perPage = 15,
+    int page = 1,
+  }) async {
+    try {
+      final queryParams = {'search': search, 'per_page': perPage, 'page': page};
+
+      if (marketplaceId != null && marketplaceId.isNotEmpty) {
+        queryParams['marketplace_id'] = marketplaceId;
+      }
+
+      final response = await ApiClient.dio.get(
+        '${Endpoint.checkerAssignedOrders.replaceAll('/assigned-orders', '')}/search',
+        queryParameters: queryParams,
+      );
+
+      return Map<String, dynamic>.from(response.data);
+    } on DioException catch (e) {
+      if (e.response != null) {
+        return Map<String, dynamic>.from(e.response!.data);
+      }
+      rethrow;
+    }
+  }
+
   /// PATCH /checker/approve-order/{id} → Approve an order after checking
   ///
   /// Parameters:
@@ -45,6 +82,21 @@ class CheckerService {
     try {
       final response = await ApiClient.dio.get(
         '${Endpoint.checkerOrderItems}/$orderId',
+      );
+
+      return Map<String, dynamic>.from(response.data);
+    } on DioException catch (e) {
+      if (e.response != null) {
+        return Map<String, dynamic>.from(e.response!.data);
+      }
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>> getOrderBySerial(String serial) async {
+    try {
+      final response = await ApiClient.dio.get(
+        '${Endpoint.checkerSearchBySerial}/${Uri.encodeComponent(serial)}',
       );
 
       return Map<String, dynamic>.from(response.data);
