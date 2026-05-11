@@ -7,6 +7,9 @@ import '../components/toast.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/navigation_helper.dart';
 
+import 'checker/widgets/checker_checking_widgets.dart';
+import 'checker/widgets/checker_list_widgets.dart';
+
 part 'checker/checker_screen_list_view.dart';
 part 'checker/checker_screen_checking_view.dart';
 part 'checker/checker_screen_details.dart';
@@ -40,6 +43,11 @@ class _CheckerScreenState extends State<CheckerScreen>
 
   int _currentPage = 1;
   int _totalPages = 1;
+  static const int _perPage = 15;
+
+  // In-memory pagination cache (per query+filter)
+  final Map<String, Map<int, List<dynamic>>> _ordersPageCache = {};
+  final Map<String, int> _ordersTotalPagesCache = {};
 
   // Marketplace filter
   String? _selectedMarketplaceId;
@@ -73,40 +81,114 @@ class _CheckerScreenState extends State<CheckerScreen>
     setState(fn);
   }
 
-  void _handleMenuSelection(String menu) {
-    NavigationHelper.handleMenuSelection(
-      context,
-      menu,
-      currentScreen: 'checker',
+  bool get _isFilterActive {
+    final hasSearch = _searchQuery.trim().isNotEmpty;
+    final hasMarketplace = (_selectedMarketplaceId ?? '').trim().isNotEmpty;
+    return hasSearch || hasMarketplace;
+  }
+
+  String _buildOrdersCacheKey({
+    required String searchQuery,
+    required String? marketplaceId,
+    required int perPage,
+  }) {
+    final normalizedSearch = searchQuery.trim().toLowerCase();
+    final normalizedMarketplaceId = (marketplaceId ?? '').trim();
+    return 'q=$normalizedSearch|m=$normalizedMarketplaceId|pp=$perPage';
+  }
+
+  String _currentOrdersCacheKey() {
+    return _buildOrdersCacheKey(
+      searchQuery: _searchQuery,
+      marketplaceId: _selectedMarketplaceId,
+      perPage: _perPage,
     );
   }
 
-  Future<void> _loadAssignedOrders() async {
+  Future<void> _refreshOrdersForCurrentQuery() async {
+    final key = _currentOrdersCacheKey();
+    _ordersPageCache.remove(key);
+    _ordersTotalPagesCache.remove(key);
+    if (mounted) {
+      setState(() {
+        _currentPage = 1;
+      });
+    }
+    await _loadOrdersPage(page: 1, forceRefresh: true);
+  }
+
+  Future<void> _loadOrdersPage({
+    required int page,
+    bool forceRefresh = false,
+  }) async {
     if (!mounted) return;
+
+    final key = _currentOrdersCacheKey();
+    final cachedPagesForKey = _ordersPageCache[key];
+    final cachedPage = (!forceRefresh && cachedPagesForKey != null)
+        ? cachedPagesForKey[page]
+        : null;
+    final cachedTotalPages = (!forceRefresh)
+        ? _ordersTotalPagesCache[key]
+        : null;
+
+    if (cachedPage != null) {
+      setState(() {
+        _currentPage = page;
+        _assignedOrders
+          ..clear()
+          ..addAll(cachedPage);
+        if (cachedTotalPages != null) {
+          _totalPages = cachedTotalPages;
+        }
+        _errorMessage = '';
+        _isListLoading = false;
+      });
+      _extractAvailableMarketplaces();
+      return;
+    }
+
     setState(() {
+      _currentPage = page;
+      _assignedOrders.clear();
       _isListLoading = true;
       _errorMessage = '';
     });
 
     try {
-      final response = await CheckerService.getAssignedOrders(
-        page: _currentPage,
-        perPage: 15,
-      );
+      final response = _isFilterActive
+          ? await CheckerService.searchOrders(
+              search: _searchQuery,
+              marketplaceId: _selectedMarketplaceId,
+              page: _currentPage,
+              perPage: _perPage,
+            )
+          : await CheckerService.getAssignedOrders(
+              page: _currentPage,
+              perPage: _perPage,
+            );
 
       if (!mounted) return;
 
       if (response['success'] == true && response['data'] != null) {
         final data = response['data'] as Map<String, dynamic>;
+        final items = List<dynamic>.from((data['data'] as List?) ?? const []);
+        final totalPages = (data['last_page'] as num?)?.toInt() ?? 1;
+
+        _ordersPageCache.putIfAbsent(key, () => {})[_currentPage] = items;
+        _ordersTotalPagesCache[key] = totalPages;
+
         setState(() {
           _assignedOrders
             ..clear()
-            ..addAll((data['data'] as List?) ?? []);
-          _totalPages = (data['last_page'] as num?)?.toInt() ?? 1;
+            ..addAll(items);
+          _totalPages = totalPages;
 
-          _assignedCount =
-              (data['total'] as num?)?.toInt() ?? _assignedOrders.length;
-          _pendingCount = (data['pending'] as num?)?.toInt() ?? 0;
+          if (!_isFilterActive) {
+            _assignedCount =
+                (data['total'] as num?)?.toInt() ?? _assignedOrders.length;
+            _pendingCount = (data['pending'] as num?)?.toInt() ?? 0;
+          }
 
           _extractAvailableMarketplaces();
           _isListLoading = false;
@@ -125,6 +207,18 @@ class _CheckerScreenState extends State<CheckerScreen>
         _isListLoading = false;
       });
     }
+  }
+
+  void _handleMenuSelection(String menu) {
+    NavigationHelper.handleMenuSelection(
+      context,
+      menu,
+      currentScreen: 'checker',
+    );
+  }
+
+  Future<void> _loadAssignedOrders() async {
+    await _loadOrdersPage(page: _currentPage);
   }
 
   void _extractAvailableMarketplaces() {
@@ -153,51 +247,11 @@ class _CheckerScreenState extends State<CheckerScreen>
     if (!mounted) return;
 
     // If search is empty and no marketplace filter, load all assigned orders
-    if (_searchQuery.isEmpty &&
-        (_selectedMarketplaceId == null || _selectedMarketplaceId!.isEmpty)) {
+    if (!_isFilterActive) {
       _currentPage = 1;
-      _loadAssignedOrders();
-      return;
     }
 
-    // List-level loading only, avoid full-screen rerender while searching
-    setState(() {
-      _isListLoading = true;
-    });
-
-    try {
-      final response = await CheckerService.searchOrders(
-        search: _searchQuery,
-        marketplaceId: _selectedMarketplaceId,
-        page: _currentPage,
-        perPage: 15,
-      );
-
-      if (!mounted) return;
-
-      if (response['success'] == true && response['data'] != null) {
-        final data = response['data'] as Map<String, dynamic>;
-        setState(() {
-          _assignedOrders
-            ..clear()
-            ..addAll((data['data'] as List?) ?? []);
-          _totalPages = (data['last_page'] as num?)?.toInt() ?? 1;
-          _errorMessage = '';
-          _isListLoading = false;
-        });
-      } else {
-        setState(() {
-          _errorMessage = response['message'] ?? 'Search failed';
-          _isListLoading = false;
-        });
-      }
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = 'Error: $error';
-        _isListLoading = false;
-      });
-    }
+    await _loadOrdersPage(page: _currentPage);
   }
 
   Future<void> _openOrderForChecking(Map<String, dynamic> order) async {
@@ -224,6 +278,9 @@ class _CheckerScreenState extends State<CheckerScreen>
           _orderItems = List<dynamic>.from(data['items'] ?? []);
           _isLoading = false;
         });
+        // Default to the items list tab so the checker can immediately see
+        // what's inside the order after selecting it.
+        _tabController?.index = 1;
         _initializeScanner();
       } else {
         setState(() {
@@ -437,7 +494,12 @@ class _CheckerScreenState extends State<CheckerScreen>
       }
     });
 
-    _scannerController?.start();
+    // Only start the camera if the Scan tab is active.
+    if (_tabController?.index == 0) {
+      _scannerController?.start();
+    } else {
+      _scannerController?.stop();
+    }
     setState(() => _torchEnabled = false);
   }
 
@@ -654,7 +716,7 @@ class _CheckerScreenState extends State<CheckerScreen>
       _torchEnabled = false;
     });
 
-    _loadAssignedOrders();
+    _refreshOrdersForCurrentQuery();
   }
 
   @override
