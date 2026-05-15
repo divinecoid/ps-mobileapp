@@ -7,25 +7,25 @@ class Warehouse {
   final String code;
   final String name;
   final int priority;
-  final bool isDeleted;
+  final bool deleted_at;
 
   Warehouse({
     required this.id,
     required this.code,
     required this.name,
     required this.priority,
-    required this.isDeleted,
+    required this.deleted_at,
   });
 
-  factory Warehouse.fromJson(Map<String, dynamic> json) {
-    return Warehouse(
-      id: json['id'] ?? '',
-      code: json['code'] ?? '',
-      name: json['name'] ?? '',
-      priority: json['priority'] ?? 0,
-      isDeleted: json['is_deleted'] ?? false,
-    );
-  }
+ factory Warehouse.fromJson(Map<String, dynamic> json) {
+  return Warehouse(
+    id: json['id'] ?? '',
+    code: json['code'] ?? '',
+    name: json['name'] ?? '',
+    priority: int.tryParse(json['priority'].toString()) ?? 0,
+    deleted_at: json['deleted_at'] == true,
+  );
+}
 
   /// Display name with code
   String get displayName => '$code - $name';
@@ -39,7 +39,7 @@ class WarehouseService {
       print('🔄 Fetching warehouses from API...');
       
       final response = await ApiClient.dio.get(
-        '/warehouse/master',
+        '/warehouse',
         options: Options(
           sendTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 10),
@@ -53,7 +53,7 @@ class WarehouseService {
         final List<dynamic> data = response.data['data'] ?? [];
         final warehouses = data
             .map((json) => Warehouse.fromJson(json))
-            .where((w) => !w.isDeleted) // Filter out deleted warehouses
+            .where((w) => !w.deleted_at) // Filter out deleted warehouses
             .toList();
         
         print('✅ Loaded ${warehouses.length} warehouses');

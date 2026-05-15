@@ -24,27 +24,7 @@ class OrderService {
       if (data is Map && data.containsKey('data')) {
         final orders = data['data'];
         if (orders is List) {
-          return orders.map((o) {
-            final m = Map<String, dynamic>.from(o);
-            return {
-              'id': (m['id'] ?? '').toString(),
-              'awbCode': (m['awb_code'] ?? '-').toString(),
-              'marketplaceId': (m['marketplace_id'] ?? '').toString(),
-              'onlineStoreId': (m['online_store_id'] ?? '').toString(),
-              'itemCount': m['item_count'] ?? 0,
-              'uniqueItemCount': m['unique_item_count'] ?? 0,
-              'status': (m['status'] ?? '-').toString(),
-              'totalWeight': m['total_weight'] ?? 0,
-              'totalPrice': m['total_price'] ?? 0,
-              'totalAmount': m['total_amount'] ?? 0,
-              'customerName': (m['customer_name'] ?? '-').toString(),
-              'customerPhone': (m['customer_phone'] ?? '-').toString(),
-              'customerAddress': (m['customer_address'] ?? '-').toString(),
-              'preparistUserId': (m['preparist_user_id'] ?? '').toString(),
-              'preparedAt': (m['prepared_at'] ?? '').toString(),
-              'prepareDuration': (m['prepare_duration'] ?? '').toString(),
-            };
-          }).toList();
+          return orders.map((o) => Map<String, dynamic>.from(o as Map)).toList();
         }
       }
 
