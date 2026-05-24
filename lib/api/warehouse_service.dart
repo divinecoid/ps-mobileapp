@@ -8,6 +8,7 @@ class Warehouse {
   final String name;
   final int priority;
   final bool isDeleted;
+  final String type;
 
   Warehouse({
     required this.id,
@@ -15,6 +16,7 @@ class Warehouse {
     required this.name,
     required this.priority,
     required this.isDeleted,
+    required this.type,
   });
 
   factory Warehouse.fromJson(Map<String, dynamic> json) {
@@ -24,6 +26,7 @@ class Warehouse {
       name: json['name'] ?? '',
       priority: json['priority'] ?? 0,
       isDeleted: json['is_deleted'] ?? false,
+      type: json['type'] ?? 'SMALL',
     );
   }
 
