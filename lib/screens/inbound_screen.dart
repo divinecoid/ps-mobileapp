@@ -468,24 +468,40 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
         await SoundService().playSuccess();
         Toast.show(context, '✅ ${barcodeProduct.typeLabel} ${isReject ? 'BS ' : ''}terscan\n$modelName - $colorName');
       } else {
-        // Piece barcode - show rack selection dialog
+        // Piece barcode - show rack selection or recommendation dialog
         // 1. Play success alert indicating barcode is recognized
         await SoundService().playSuccess();
         
         // 2. Stop main scanner before showing dialog so it doesn't scan barcodes behind the dialog
         await _scannerController.stop();
         
-        await _showRackSelectionDialog(
-          cleanedBarcode: cleanedBarcode,
-          type: type,
-          modelName: modelName,
-          colorName: colorName,
-          sizeCode: sizeCode,
-          cmtCode: cmtCode,
-          qty: qty,
-          timestamp: timestamp,
-          isReject: isReject,
-        );
+        final rackData = data['rack'];
+        if (rackData != null && rackData is Map<String, dynamic>) {
+          await _showRecommendRackDialog(
+            cleanedBarcode: cleanedBarcode,
+            type: type,
+            modelName: modelName,
+            colorName: colorName,
+            sizeCode: sizeCode,
+            cmtCode: cmtCode,
+            qty: qty,
+            timestamp: timestamp,
+            isReject: isReject,
+            rackData: rackData,
+          );
+        } else {
+          await _showRackSelectionDialog(
+            cleanedBarcode: cleanedBarcode,
+            type: type,
+            modelName: modelName,
+            colorName: colorName,
+            sizeCode: sizeCode,
+            cmtCode: cmtCode,
+            qty: qty,
+            timestamp: timestamp,
+            isReject: isReject,
+          );
+        }
         
         // Start scanner again after dialog is closed
         if (mounted) {
@@ -503,6 +519,165 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
         });
       }
     }
+  }
+
+  Future<void> _showRecommendRackDialog({
+    required String cleanedBarcode,
+    required bp.BarcodeType type,
+    required String modelName,
+    required String colorName,
+    required String sizeCode,
+    required String cmtCode,
+    required int qty,
+    required String timestamp,
+    required bool isReject,
+    required Map<String, dynamic> rackData,
+  }) async {
+    final rackId = rackData['id'];
+    final rackCode = rackData['code'];
+    final rackName = rackData['name'];
+    final warehouseName = rackData['warehouse']?['name'] ?? '';
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.check_circle_outline, color: Colors.green.shade700, size: 24),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Rekomendasi Rak',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Sistem mendeteksi rak penyimpanan yang sesuai untuk produk ini:',
+              style: TextStyle(color: Colors.grey[700], fontSize: 13),
+            ),
+            SizedBox(height: 12),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                border: Border.all(color: Colors.green.shade200),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'KODE RAK: $rackCode',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.green.shade900,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Nama Rak: $rackName',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                  if (warehouseName.isNotEmpty) ...[
+                    SizedBox(height: 2),
+                    Text(
+                      'Gudang: $warehouseName',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(height: 12),
+            // Product info
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$modelName - $colorName - $sizeCode',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Jumlah: $qty pcs',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              SoundService().playError();
+              Toast.show(context, '❌ Barcode dibatalkan');
+            },
+            child: Text('Batal', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              
+              // Add barcode with recommended rack
+              final barcodeProduct = bp.BarcodeProduct(
+                barcode: cleanedBarcode,
+                type: type,
+                model: modelName,
+                warna: colorName,
+                size: sizeCode,
+                rak: cmtCode,
+                rackId: rackId,
+                rackCode: rackCode,
+                qty: qty,
+                requestId: 'REQ-$cmtCode-$timestamp',
+                isReject: isReject,
+              ).markAsScanned();
+
+              setState(() {
+                _scannedBarcodes.insert(0, barcodeProduct);
+              });
+
+              SoundService().playSuccess();
+              Toast.show(context, '✅ ${barcodeProduct.typeLabel} ${isReject ? 'BS ' : ''}terscan');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade600,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text('Oke'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _showRackSelectionDialog({
