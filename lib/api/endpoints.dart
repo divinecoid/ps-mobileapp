@@ -35,4 +35,12 @@ class Endpoint {
   static const outboundAssignOrder = '/outbound/assign-order';
   static const outboundUnassignOrder = '/outbound/unassign-order';
   static const outboundAssignedOrders = '/outbound/assigned-orders';
+
+  // CHECKER
+  static const checkerAssignedOrders = '/checker/assigned-orders';
+  static const checkerSearchBySerial = '/checker/search-by-serial';
+  static const checkerOrderItems = '/checker/order-items';
+  static const checkerValidateProductBarcode =
+      '/checker/validate-product-barcode';
+  static const checkerApproveOrder = '/checker/approve-order';
 }

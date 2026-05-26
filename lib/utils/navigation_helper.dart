@@ -4,6 +4,7 @@ import '../screens/order_screen.dart';
 import '../screens/my_order_screen.dart';
 import '../screens/outbound_screen.dart';
 import '../screens/inbound_screen.dart';
+import '../screens/checker_screen.dart';
 import '../screens/reject_screen.dart';
 import '../screens/mutation_screen.dart';
 import '../screens/login_screen.dart';
@@ -16,7 +17,12 @@ class NavigationHelper {
   /// Handle menu selection from app drawer
   /// Returns true if navigation was handled, false otherwise
   /// [usePush] - if true, uses Navigator.push instead of pushReplacement (for dashboard)
-  static bool handleMenuSelection(BuildContext context, String menu, {String? currentScreen, bool usePush = false}) {
+  static bool handleMenuSelection(
+    BuildContext context,
+    String menu, {
+    String? currentScreen,
+    bool usePush = false,
+  }) {
     switch (menu) {
       case 'dashboard':
         if (currentScreen != 'dashboard') {
@@ -66,6 +72,15 @@ class NavigationHelper {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => InboundScreen()),
+          );
+        }
+        return true;
+
+      case 'checker':
+        if (currentScreen != 'checker') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const CheckerScreen()),
           );
         }
         return true;
@@ -132,4 +147,3 @@ class NavigationHelper {
     }
   }
 }
-

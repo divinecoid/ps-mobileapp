@@ -4,11 +4,7 @@ class AppDrawer extends StatefulWidget {
   final String? staffId;
   final Function(String)? onMenuSelected;
 
-  const AppDrawer({
-    super.key,
-    this.staffId,
-    this.onMenuSelected,
-  });
+  const AppDrawer({super.key, this.staffId, this.onMenuSelected});
 
   @override
   State<AppDrawer> createState() => _AppDrawerState();
@@ -98,10 +94,7 @@ class _AppDrawerState extends State<AppDrawer> {
                     children: [
                       Text(
                         'ID Staff',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                       ),
                       SizedBox(height: 4),
                       Text(
@@ -273,7 +266,10 @@ class _AppDrawerState extends State<AppDrawer> {
                       children: [
                         Divider(height: 1),
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           child: _buildScanSubmenuItem(
                             title: 'Outbound',
                             icon: Icons.output,
@@ -282,8 +278,12 @@ class _AppDrawerState extends State<AppDrawer> {
                             onTap: () => _handleMenuTap('outbound'),
                           ),
                         ),
+
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           child: _buildScanSubmenuItem(
                             title: 'Inbound',
                             icon: Icons.input,
@@ -293,7 +293,23 @@ class _AppDrawerState extends State<AppDrawer> {
                           ),
                         ),
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          child: _buildScanSubmenuItem(
+                            title: 'Checker',
+                            icon: Icons.output,
+                            color: Colors.orange.shade100,
+                            iconColor: Colors.orange.shade700,
+                            onTap: () => _handleMenuTap('checker'),
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           child: _buildScanSubmenuItem(
                             title: 'Mutasi',
                             icon: Icons.swap_horiz,
@@ -303,7 +319,10 @@ class _AppDrawerState extends State<AppDrawer> {
                           ),
                         ),
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           child: _buildScanSubmenuItem(
                             title: 'Reject',
                             icon: Icons.cancel,
@@ -313,7 +332,10 @@ class _AppDrawerState extends State<AppDrawer> {
                           ),
                         ),
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           child: _buildScanSubmenuItem(
                             title: 'Printer Bluetooth',
                             icon: Icons.print,
@@ -358,11 +380,7 @@ class _AppDrawerState extends State<AppDrawer> {
                   color: iconColor,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  Icons.close,
-                  color: Colors.white,
-                  size: 16,
-                ),
+                child: Icon(Icons.close, color: Colors.white, size: 16),
               ),
               SizedBox(width: 12),
               Text(
@@ -378,7 +396,7 @@ class _AppDrawerState extends State<AppDrawer> {
         ),
       );
     }
-    
+
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -389,11 +407,7 @@ class _AppDrawerState extends State<AppDrawer> {
         ),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: iconColor,
-              size: 20,
-            ),
+            Icon(icon, color: iconColor, size: 20),
             SizedBox(width: 12),
             Text(
               title,

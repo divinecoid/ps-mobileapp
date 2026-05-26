@@ -8,6 +8,7 @@ class Warehouse {
   final String name;
   final int priority;
   final bool deleted_at;
+  final String type;
 
   Warehouse({
     required this.id,
@@ -15,6 +16,7 @@ class Warehouse {
     required this.name,
     required this.priority,
     required this.deleted_at,
+    required this.type,
   });
 
  factory Warehouse.fromJson(Map<String, dynamic> json) {
@@ -24,6 +26,7 @@ class Warehouse {
     name: json['name'] ?? '',
     priority: int.tryParse(json['priority'].toString()) ?? 0,
     deleted_at: json['deleted_at'] == true,
+      type: json['type'] ?? 'SMALL',
   );
 }
 

@@ -1,11 +1,24 @@
 import 'package:flutter/material.dart';
 
 class Toast {
+  static OverlayEntry? _activeToast;
+  static String? _activeMessage;
+  static DateTime? _lastShownAt;
+
   static void show(
     BuildContext context,
     String message, {
     bool isError = false,
   }) {
+    final now = DateTime.now();
+    if (_activeMessage == message &&
+        _lastShownAt != null &&
+        now.difference(_lastShownAt!) < const Duration(seconds: 2)) {
+      return;
+    }
+
+    _activeToast?.remove();
+
     final overlay = Overlay.of(context);
     final overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
@@ -56,8 +69,19 @@ class Toast {
       ),
     );
 
+    _activeToast = overlayEntry;
+    _activeMessage = message;
+    _lastShownAt = now;
+
     overlay.insert(overlayEntry);
 
-    Future.delayed(Duration(seconds: 2)).then((_) => overlayEntry.remove());
+    Future.delayed(const Duration(seconds: 2)).then((_) {
+      if (_activeToast == overlayEntry) {
+        _activeToast = null;
+        _activeMessage = null;
+        _lastShownAt = null;
+      }
+      overlayEntry.remove();
+    });
   }
 }
