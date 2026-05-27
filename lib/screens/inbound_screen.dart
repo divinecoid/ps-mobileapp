@@ -1635,7 +1635,8 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                                 final barcode = _scannedBarcodes[index];
                                 return _buildBarcodeCard(barcode);
                               },
-                            ),                  // Form Section - Only show for tab 0 and 1
+                            ),
+                    ),                  // Form Section - Only show for tab 0 and 1
                   if (_tabController.index != 2)
                     Container(
                       // Semi-transparent white to show some background color
