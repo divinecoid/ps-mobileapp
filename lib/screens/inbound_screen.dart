@@ -1064,11 +1064,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
         .map((b) => b.barcode)
         .toList();
 
-    // Check if dozen barcodes exist but no warehouse selected
-    if (dozenBarcodes.isNotEmpty && _selectedWarehouseId == null) {
-      Toast.show(context, 'Pilih warehouse terlebih dahulu untuk penerimaan dozen');
-      return;
-    }
+
 
     // Check if piece barcodes exist but some don't have rack_id
     final piecesWithoutRack = pieceBarcodes.where((p) {
@@ -1639,10 +1635,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                                 final barcode = _scannedBarcodes[index];
                                 return _buildBarcodeCard(barcode);
                               },
-                            ),
-                    ),
-                  
-                  // Form Section - Only show for tab 0 and 1
+                            ),                  // Form Section - Only show for tab 0 and 1
                   if (_tabController.index != 2)
                     Container(
                       // Semi-transparent white to show some background color
@@ -1652,78 +1645,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Warehouse Dropdown
-                          Text(
-                            'Warehouse',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          _isLoadingWarehouses
-                              ? Container(
-                                  padding: EdgeInsets.symmetric(vertical: 12),
-                                  child: Row(
-                                    children: [
-                                      SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      ),
-                                      SizedBox(width: 12),
-                                      Text('Memuat warehouse...'),
-                                    ],
-                                  ),
-                                )
-                              : _warehouseLoadError || _warehouses.isEmpty
-                                  ? Container(
-                                      padding: EdgeInsets.symmetric(vertical: 8),
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.error_outline, color: Colors.red, size: 20),
-                                          SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              'Gagal memuat warehouse',
-                                              style: TextStyle(color: Colors.red),
-                                            ),
-                                          ),
-                                          TextButton.icon(
-                                            onPressed: _loadWarehouses,
-                                            icon: Icon(Icons.refresh, size: 18),
-                                            label: Text('Retry'),
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                  : DropdownButtonFormField<String>(
-                                      value: _selectedWarehouseId,
-                                      decoration: InputDecoration(
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 12,
-                                        ),
-                                        isDense: true,
-                                      ),
-                                      items: _warehouses.map((warehouse) {
-                                        return DropdownMenuItem<String>(
-                                          value: warehouse.id,
-                                          child: Text(warehouse.displayName),
-                                        );
-                                      }).toList(),
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _selectedWarehouseId = value;
-                                        });
-                                      },
-                                    ),
-                          
-                          SizedBox(height: 16),
-                          
+                          // Submit Button  
                           // Submit Button
                           SizedBox(
                             width: double.infinity,
