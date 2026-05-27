@@ -448,25 +448,52 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
       final qty = isDozen ? 12 : 1;
 
       if (isDozen) {
-        // Dozen barcode - add directly without rack selection
-        final barcodeProduct = bp.BarcodeProduct(
-          barcode: cleanedBarcode,
-          type: type,
-          model: modelName,
-          warna: colorName,
-          size: sizeCode,
-          rak: cmtCode,
-          qty: qty,
-          requestId: 'REQ-$cmtCode-$timestamp',
-          isReject: isReject,
-        ).markAsScanned();
+        final rackData = data['rack'];
+        if (rackData != null && rackData is Map<String, dynamic>) {
+          // Play success alert indicating barcode is recognized
+          await SoundService().playSuccess();
+          
+          // Stop main scanner before showing dialog so it doesn't scan barcodes behind the dialog
+          await _scannerController.stop();
+          
+          await _showRecommendRackDialog(
+            cleanedBarcode: cleanedBarcode,
+            type: type,
+            modelName: modelName,
+            colorName: colorName,
+            sizeCode: sizeCode,
+            cmtCode: cmtCode,
+            qty: qty,
+            timestamp: timestamp,
+            isReject: isReject,
+            rackData: rackData,
+          );
+          
+          // Start scanner again after dialog is closed
+          if (mounted) {
+            await _scannerController.start();
+          }
+        } else {
+          // Dozen barcode - add directly without rack selection if no recommendation found
+          final barcodeProduct = bp.BarcodeProduct(
+            barcode: cleanedBarcode,
+            type: type,
+            model: modelName,
+            warna: colorName,
+            size: sizeCode,
+            rak: cmtCode,
+            qty: qty,
+            requestId: 'REQ-$cmtCode-$timestamp',
+            isReject: isReject,
+          ).markAsScanned();
 
-        setState(() {
-          _scannedBarcodes.insert(0, barcodeProduct);
-        });
+          setState(() {
+            _scannedBarcodes.insert(0, barcodeProduct);
+          });
 
-        await SoundService().playSuccess();
-        Toast.show(context, '✅ ${barcodeProduct.typeLabel} ${isReject ? 'BS ' : ''}terscan\n$modelName - $colorName');
+          await SoundService().playSuccess();
+          Toast.show(context, '✅ ${barcodeProduct.typeLabel} ${isReject ? 'BS ' : ''}terscan\n$modelName - $colorName');
+        }
       } else {
         // Piece barcode - show rack selection or recommendation dialog
         // 1. Play success alert indicating barcode is recognized
@@ -1814,9 +1841,9 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
   }
 
   Widget _buildBarcodeCard(bp.BarcodeProduct barcode) {
-    // Get rack name if available for piece items
+    // Get rack name if available
     String? rackName;
-    if (barcode.type == bp.BarcodeType.satuan && barcode.rackCode != null) {
+    if (barcode.rackCode != null && barcode.rackCode!.isNotEmpty) {
       rackName = barcode.rackCode;
     }
 
@@ -1886,11 +1913,22 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
               SizedBox(height: 2),
               Row(
                 children: [
-                  Icon(Icons.inventory_2, size: 12, color: Colors.purple.shade600),
+                  Icon(
+                    Icons.inventory_2, 
+                    size: 12, 
+                    color: barcode.type == bp.BarcodeType.lusin 
+                        ? Colors.orange.shade600 
+                        : Colors.purple.shade600
+                  ),
                   SizedBox(width: 4),
                   Text(
                     rackName,
-                    style: TextStyle(fontSize: 11, color: Colors.purple.shade600),
+                    style: TextStyle(
+                      fontSize: 11, 
+                      color: barcode.type == bp.BarcodeType.lusin 
+                          ? Colors.orange.shade600 
+                          : Colors.purple.shade600
+                    ),
                   ),
                 ],
               ),
