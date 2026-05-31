@@ -8,9 +8,21 @@ import 'endpoints.dart';
 class ApiClient {
   static Completer<bool>? _refreshCompleter;
 
+  static String get _baseUrl {
+    final apiUrl = dotenv.env['API_URL'];
+    if (apiUrl != null && apiUrl.isNotEmpty) {
+      return apiUrl;
+    }
+    final baseAppUrl = dotenv.env['VITE_APP_BASE_URL'];
+    if (baseAppUrl != null && baseAppUrl.isNotEmpty) {
+      return baseAppUrl.endsWith('/') ? '${baseAppUrl}api' : '$baseAppUrl/api';
+    }
+    return 'http://localhost:8000/api';
+  }
+
   static final Dio dio = Dio(
     BaseOptions(
-      baseUrl: dotenv.env['API_URL']!,
+      baseUrl: _baseUrl,
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
@@ -22,7 +34,7 @@ class ApiClient {
 
   static final Dio _refreshDio = Dio(
     BaseOptions(
-      baseUrl: dotenv.env['API_URL']!,
+      baseUrl: _baseUrl,
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',

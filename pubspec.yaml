@@ -72,6 +72,7 @@ flutter:
     - .env
     - assets/audio/correct.mp3
     - assets/audio/wrong.mp3
+    - assets/images/icon.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

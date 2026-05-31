@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:ps_mobileapp_main/components/toast.dart';
 import 'package:ps_mobileapp_main/screens/login_screen.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../api/http_client.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -18,28 +19,146 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreen extends State<DashboardScreen> {
   bool _loading = false;
   String _selectedPeriod = 'Hari ini';
+  DateTime? _startDate = DateTime.now();
+  DateTime? _endDate = DateTime.now();
 
-  // Dummy data statistics
+  // Real data statistics
   final Map<String, dynamic> _stats = {
-    'avgPreparationTime': 12.5, // menit
-    'totalPackages': 145,
-    'totalItems': 892,
-    'completedOrders': 128,
-    'pendingOrders': 17,
-    'todayPackages': 23,
-    'todayItems': 156,
+    'avgPreparationTime': 0.0,
+    'totalPackages': 0,
+    'totalItems': 0,
+    'completedOrders': 0,
+    'pendingOrders': 0,
+    'todayPackages': 0,
+    'todayItems': 0,
   };
 
   // Weekly data for charts
-  final List<Map<String, dynamic>> _weeklyData = [
-    {'day': 'Sen', 'packages': 18, 'items': 112},
-    {'day': 'Sel', 'packages': 22, 'items': 145},
-    {'day': 'Rab', 'packages': 25, 'items': 168},
-    {'day': 'Kam', 'packages': 20, 'items': 134},
-    {'day': 'Jum', 'packages': 28, 'items': 189},
-    {'day': 'Sab', 'packages': 15, 'items': 98},
-    {'day': 'Min', 'packages': 23, 'items': 156},
-  ];
+  final List<Map<String, dynamic>> _weeklyData = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchDashboardData();
+    });
+  }
+
+  String _formatDate(DateTime date) {
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  String _formatDateForApi(DateTime date) {
+    return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+  }
+
+  Future<void> _fetchDashboardData() async {
+    setState(() {
+      _loading = true;
+    });
+
+    try {
+      String periodParam = 'today';
+      if (_selectedPeriod == 'Minggu ini') periodParam = 'this_week';
+      if (_selectedPeriod == 'Bulan ini') periodParam = 'this_month';
+      if (_selectedPeriod == 'Custom Tanggal') periodParam = 'custom';
+
+      Map<String, dynamic> queryParams = {'period': periodParam};
+      if (periodParam == 'custom' && _startDate != null && _endDate != null) {
+        queryParams['start_date'] = _formatDateForApi(_startDate!);
+        queryParams['end_date'] = _formatDateForApi(_endDate!);
+      }
+
+      final response = await ApiClient.dio.get(
+        '/dashboard/stats',
+        queryParameters: queryParams,
+      );
+
+      if (response.data != null && response.data['success'] == true) {
+        final data = response.data['data'];
+        setState(() {
+          _stats['avgPreparationTime'] = data['avgPreparationTime'];
+          _stats['totalPackages'] = data['totalPackages'];
+          _stats['totalItems'] = data['totalItems'];
+          _stats['completedOrders'] = data['completedOrders'];
+          _stats['pendingOrders'] = data['pendingOrders'];
+          _stats['todayPackages'] = data['todayPackages'];
+          _stats['todayItems'] = data['todayItems'];
+
+          if (data['weeklyData'] != null) {
+            _weeklyData.clear();
+            for (var item in data['weeklyData']) {
+              _weeklyData.add({
+                'day': item['day'],
+                'packages': item['packages'],
+                'items': item['items'],
+              });
+            }
+          }
+        });
+      } else {
+        if (mounted) Toast.show(context, "Gagal memuat data dashboard");
+      }
+    } catch (e) {
+      print("Error fetching dashboard stats: $e");
+      if (mounted) Toast.show(context, "Koneksi ke server gagal");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _selectCustomDateRange() async {
+    final initialRange = DateTimeRange(
+      start: _startDate ?? DateTime.now(),
+      end: _endDate ?? DateTime.now(),
+    );
+
+    final pickedRange = await showDateRangePicker(
+      context: context,
+      initialDateRange: initialRange,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: 'PILIH RENTANG TANGGAL',
+      cancelText: 'BATAL',
+      confirmText: 'PILIH',
+      saveText: 'SIMPAN',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.blue.shade700,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.grey.shade900,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.blue.shade700,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedRange != null) {
+      setState(() {
+        _startDate = pickedRange.start;
+        _endDate = pickedRange.end;
+        _selectedPeriod = 'Custom Tanggal';
+      });
+      _fetchDashboardData();
+    }
+  }
 
   Future<void> _handleLogout() async {
     setState(() {
@@ -91,54 +210,87 @@ class _DashboardScreen extends State<DashboardScreen> {
           onMenuSelected: _handleMenuSelection,
         ),
         body: RefreshIndicator(
-          onRefresh: () async {
-            // TODO: Refresh data
-            await Future.delayed(Duration(seconds: 1));
-          },
+          onRefresh: _fetchDashboardData,
           child: SingleChildScrollView(
             padding: EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Period Selector
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Dashboard',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[900],
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Dashboard',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[900],
+                          ),
+                        ),
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: DropdownButton<String>(
+                            value: _selectedPeriod,
+                            underline: SizedBox(),
+                            isDense: true,
+                            items: ['Hari ini', 'Minggu ini', 'Bulan ini', 'Custom Tanggal']
+                                .map((period) => DropdownMenuItem(
+                                      value: period,
+                                      child: Text(
+                                        period,
+                                        style: TextStyle(fontSize: 14),
+                                      ),
+                                    ))
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == 'Custom Tanggal') {
+                                _selectCustomDateRange();
+                              } else {
+                                setState(() {
+                                  _selectedPeriod = value!;
+                                });
+                                _fetchDashboardData();
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.blue.shade200),
+                    if (_selectedPeriod == 'Custom Tanggal' && _startDate != null && _endDate != null) ...[
+                      SizedBox(height: 8),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.blue.shade100),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.date_range, size: 16, color: Colors.blue.shade700),
+                            SizedBox(width: 6),
+                            Text(
+                              'Rentang: ${_formatDate(_startDate!)} - ${_formatDate(_endDate!)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue.shade700,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: DropdownButton<String>(
-                        value: _selectedPeriod,
-                        underline: SizedBox(),
-                        isDense: true,
-                        items: ['Hari ini', 'Minggu ini', 'Bulan ini']
-                            .map((period) => DropdownMenuItem(
-                                  value: period,
-                                  child: Text(
-                                    period,
-                                    style: TextStyle(fontSize: 14),
-                                  ),
-                                ))
-                            .toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedPeriod = value!;
-                          });
-                        },
-                      ),
-                    ),
+                    ],
                   ],
                 ),
                 SizedBox(height: 20),

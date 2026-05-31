@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/auth_provider.dart';
@@ -13,10 +14,38 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _usernameFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
+  
   bool _loading = false;
+  bool _obscurePassword = true;
   String? _errorMessage;
 
+  @override
+  void initState() {
+    super.initState();
+    _usernameFocusNode.addListener(() => setState(() {}));
+    _passwordFocusNode.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    _usernameFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    super.dispose();
+  }
+
   Future<void> _handleLogin() async {
+    // Basic validation
+    if (_usernameController.text.trim().isEmpty || _passwordController.text.trim().isEmpty) {
+      setState(() {
+        _errorMessage = "Username and Password cannot be empty";
+      });
+      return;
+    }
+
     setState(() {
       _loading = true;
       _errorMessage = null;
@@ -28,7 +57,9 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordController.text.trim(),
     );
 
-    setState(() => _loading = false);
+    if (mounted) {
+      setState(() => _loading = false);
+    }
 
     if (success && mounted) {
       Navigator.pushReplacement(
@@ -36,83 +67,501 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => DashboardScreen()),
       );
     } else {
-      setState(() {
-        _errorMessage = "Invalid username or password";
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = "Invalid username or password";
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                "Welcome",
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+      body: Stack(
+        children: [
+          // 1. Ambient Background Gradient
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF0F172A), // Deep Slate Dark Blue
+                  Color(0xFF1E1E38), // Deep Indigo
+                  Color(0xFF0B0F19), // Midnight Black-Blue
+                ],
               ),
+            ),
+          ),
 
-              SizedBox(height: 40),
-
-              TextField(
-                controller: _usernameController,
-                decoration: InputDecoration(
-                  labelText: "Username",
-                  border: OutlineInputBorder(),
+          // 2. Decorative Glowing Spheres
+          // Top Left Sphere
+          Positioned(
+            top: -screenSize.height * 0.1,
+            left: -screenSize.width * 0.15,
+            child: Container(
+              width: screenSize.width * 0.7,
+              height: screenSize.width * 0.7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Color(0x333B82F6), // Blue Glow
+                    Color(0x003B82F6),
+                  ],
                 ),
               ),
-
-              SizedBox(height: 20),
-
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: "Password",
-                  border: OutlineInputBorder(),
+            ),
+          ),
+          
+          // Middle Right Sphere
+          Positioned(
+            top: screenSize.height * 0.3,
+            right: -screenSize.width * 0.25,
+            child: Container(
+              width: screenSize.width * 0.8,
+              height: screenSize.width * 0.8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Color(0x228B5CF6), // Purple Glow
+                    Color(0x008B5CF6),
+                  ],
                 ),
               ),
+            ),
+          ),
 
-              if (_errorMessage != null) ...[
-                SizedBox(height: 12),
-                Text(
-                  _errorMessage!,
-                  style: TextStyle(color: Colors.red),
-                  textAlign: TextAlign.center,
+          // Bottom Left Sphere
+          Positioned(
+            bottom: -screenSize.height * 0.05,
+            left: -screenSize.width * 0.1,
+            child: Container(
+              width: screenSize.width * 0.6,
+              height: screenSize.width * 0.6,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Color(0x2206B6D4), // Cyan/Teal Glow
+                    Color(0x0006B6D4),
+                  ],
                 ),
-              ],
+              ),
+            ),
+          ),
 
-              SizedBox(height: 30),
-
-              ElevatedButton(
-                onPressed: _loading ? null : _handleLogin,
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 14),
-                  textStyle: TextStyle(fontSize: 16),
-                ),
-                child: _loading
-                    ? SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
+          // 3. Main Content
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                physics: BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 1000),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, animValue, child) {
+                    return Opacity(
+                      opacity: animValue,
+                      child: Transform.translate(
+                        offset: Offset(0, 30 * (1.0 - animValue)),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Elegant App Logo Section
+                      Center(
+                        child: Container(
+                          height: 90,
+                          width: 90,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.blue.shade400.withOpacity(0.2),
+                                Colors.indigo.shade500.withOpacity(0.05),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            border: Border.all(
+                              color: Colors.blue.shade300.withOpacity(0.3),
+                              width: 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.shade500.withOpacity(0.15),
+                                blurRadius: 20,
+                                spreadRadius: 1,
+                              )
+                            ]
+                          ),
+                          child: Center(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(40),
+                              child: Image.asset(
+                                'assets/images/icon.png',
+                                height: 56,
+                                width: 56,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) {
+                                  // Fallback beautiful iconic graphic if image not loaded
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: LinearGradient(
+                                        colors: [Colors.blue.shade400, Colors.indigo.shade600],
+                                      ),
+                                    ),
+                                    padding: EdgeInsets.all(12),
+                                    child: Icon(
+                                      Icons.inventory_2_rounded,
+                                      size: 32,
+                                      color: Colors.white,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                           ),
                         ),
-                      )
-                    : Text("Login"),
+                      ),
+                      
+                      SizedBox(height: 16),
+                      
+                      // App Name & Welcome text
+                      Text(
+                        "PLAINSTORE",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 6,
+                          color: Colors.white,
+                          shadows: [
+                            Shadow(
+                              color: Colors.blue.shade300.withOpacity(0.3),
+                              offset: Offset(0, 2),
+                              blurRadius: 4,
+                            )
+                          ]
+                        ),
+                      ),
+                      
+                      SizedBox(height: 6),
+                      
+                      Text(
+                        "Enter credentials to access mobile dashboard",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withOpacity(0.5),
+                          fontWeight: FontWeight.w300,
+                        ),
+                      ),
+
+                      SizedBox(height: 36),
+
+                      // Glassmorphism Card
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                          child: Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.06),
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.12),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 24,
+                                  offset: Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Sleek Error Message Box
+                                if (_errorMessage != null) ...[
+                                  Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    margin: EdgeInsets.only(bottom: 20),
+                                    decoration: BoxDecoration(
+                                      color: Colors.redAccent.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: Colors.redAccent.withOpacity(0.35),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.error_outline_rounded,
+                                          color: Colors.redAccent.shade100,
+                                          size: 20,
+                                        ),
+                                        SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            _errorMessage!,
+                                            style: TextStyle(
+                                              color: Colors.redAccent.shade100,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+
+                                // Username Input Field
+                                _buildTextField(
+                                  controller: _usernameController,
+                                  focusNode: _usernameFocusNode,
+                                  labelText: "Username",
+                                  hintText: "Enter your username",
+                                  prefixIcon: Icons.person_outline_rounded,
+                                ),
+
+                                SizedBox(height: 20),
+
+                                // Password Input Field
+                                _buildTextField(
+                                  controller: _passwordController,
+                                  focusNode: _passwordFocusNode,
+                                  labelText: "Password",
+                                  hintText: "Enter your password",
+                                  prefixIcon: Icons.lock_outline_rounded,
+                                  obscureText: _obscurePassword,
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_off_outlined
+                                          : Icons.visibility_outlined,
+                                      color: _passwordFocusNode.hasFocus
+                                          ? Colors.blue.shade300
+                                          : Colors.white.withOpacity(0.4),
+                                      size: 20,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _obscurePassword = !_obscurePassword;
+                                      });
+                                    },
+                                  ),
+                                ),
+
+                                SizedBox(height: 12),
+
+                                // Sleek Forgot Password placeholder
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed: () {
+                                      // Optional placeholder feedback
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text("Please contact system administrator to reset password."),
+                                          backgroundColor: Colors.indigo.shade800,
+                                        ),
+                                      );
+                                    },
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: Text(
+                                      "Forgot Password?",
+                                      style: TextStyle(
+                                        color: Colors.blue.shade300,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                                SizedBox(height: 28),
+
+                                // Elegant Morphing Gradient Login Button
+                                Container(
+                                  height: 52,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    gradient: LinearGradient(
+                                      colors: _loading
+                                          ? [Colors.blue.shade600.withOpacity(0.7), Colors.indigo.shade700.withOpacity(0.7)]
+                                          : [Colors.blue.shade500, Colors.indigo.shade600],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    boxShadow: _loading
+                                        ? []
+                                        : [
+                                            BoxShadow(
+                                              color: Colors.blue.shade500.withOpacity(0.35),
+                                              blurRadius: 16,
+                                              offset: Offset(0, 6),
+                                            ),
+                                          ],
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                                                   child: InkWell(
+                                      onTap: _loading ? null : _handleLogin,
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Center(
+                                        child: _loading
+                                            ? SizedBox(
+                                                height: 22,
+                                                width: 22,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2.5,
+                                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                                    Colors.white,
+                                                  ),
+                                                ),
+                                              )
+                                            : Text(
+                                                "LOG IN",
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.bold,
+                                                  letterSpacing: 1.5,
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      
+                      SizedBox(height: 40),
+                      
+                      // Footer Version Text
+                      Text(
+                        "PS MOBILE v0.0.1",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withOpacity(0.3),
+                          letterSpacing: 1.5,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
+
+  // Beautiful Reusable Glassmorphism TextField Builder
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required String labelText,
+    required String hintText,
+    required IconData prefixIcon,
+    bool obscureText = false,
+    Widget? suffixIcon,
+  }) {
+    final isFocused = focusNode.hasFocus;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Premium Label Text
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          child: Text(
+            labelText,
+            style: TextStyle(
+              color: isFocused ? Colors.blue.shade300 : Colors.white.withOpacity(0.6),
+              fontSize: 12,
+              fontWeight: isFocused ? FontWeight.w600 : FontWeight.w500,
+            ),
+          ),
+        ),
+        
+        // Input Decoration wrapper
+        AnimatedContainer(
+          duration: Duration(milliseconds: 250),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: Colors.white.withOpacity(isFocused ? 0.09 : 0.04),
+            border: Border.all(
+              color: isFocused 
+                  ? Colors.blue.shade400.withOpacity(0.8) 
+                  : Colors.white.withOpacity(0.08),
+              width: isFocused ? 1.8 : 1.0,
+            ),
+            boxShadow: isFocused
+                ? [
+                    BoxShadow(
+                      color: Colors.blue.shade400.withOpacity(0.12),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    )
+                  ]
+                : [],
+          ),
+          child: TextField(
+            controller: controller,
+            focusNode: focusNode,
+            obscureText: obscureText,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+            ),
+            cursorColor: Colors.blue.shade300,
+            decoration: InputDecoration(
+              hintText: hintText,
+              hintStyle: TextStyle(
+                color: Colors.white.withOpacity(0.3),
+                fontSize: 14,
+              ),
+              prefixIcon: Icon(
+                prefixIcon,
+                color: isFocused ? Colors.blue.shade300 : Colors.white.withOpacity(0.4),
+                size: 22,
+              ),
+              suffixIcon: suffixIcon,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
+
