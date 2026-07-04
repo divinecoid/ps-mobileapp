@@ -4,6 +4,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 
 import 'state/auth_provider.dart';
+import 'state/notification_provider.dart';
+import 'services/notification_manager.dart';
 // import 'state/dashboard_provider.dart';
 import 'utils/secure_storage.dart';
 import 'utils/auth_event_bus.dart';
@@ -67,6 +69,17 @@ class _MyAppState extends State<MyApp> {
       _initialToken = token;
       _checkingToken = false;
     });
+
+    // Start notification polling when token exists and app has loaded
+    if (token != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          NotificationManager.instance.start(_navigatorKey.currentState!.context);
+        } catch (e) {
+          // ignore if navigator not ready
+        }
+      });
+    }
   }
 
   @override
@@ -80,8 +93,9 @@ class _MyAppState extends State<MyApp> {
     }
 
     return MultiProvider(
-      providers: [
+        providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
         // ChangeNotifierProvider(create: (_) => DashboardProvider()),
       ],
       child: MaterialApp(
@@ -94,3 +108,4 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
+

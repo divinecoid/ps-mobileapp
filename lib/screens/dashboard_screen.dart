@@ -8,6 +8,9 @@ import 'package:ps_mobileapp_main/components/toast.dart';
 import 'package:ps_mobileapp_main/screens/login_screen.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../api/http_client.dart';
+import 'package:provider/provider.dart';
+import '../state/notification_provider.dart';
+import 'notifications_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -205,6 +208,39 @@ class _DashboardScreen extends State<DashboardScreen> {
             ),
           ),
           centerTitle: true,
+          actions: [
+            Consumer<NotificationProvider>(
+              builder: (context, provider, _) {
+                final unread = provider.unreadCount;
+                return IconButton(
+                  icon: Stack(
+                    children: [
+                      Icon(Icons.notifications, color: Colors.white),
+                      if (unread > 0)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            padding: EdgeInsets.all(2),
+                            decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                            constraints: BoxConstraints(minWidth: 16, minHeight: 16),
+                            child: Center(
+                              child: Text('$unread', style: TextStyle(color: Colors.white, fontSize: 10)),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  onPressed: () async {
+                    // Navigate to notifications screen
+                    await Navigator.push(context, MaterialPageRoute(builder: (_) => NotificationsScreen()));
+                    // refresh provider after returning
+                    provider.fetchNotifications();
+                  },
+                );
+              },
+            ),
+          ],
         ),
         drawer: AppDrawer(
           onMenuSelected: _handleMenuSelection,

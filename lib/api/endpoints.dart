@@ -43,4 +43,8 @@ class Endpoint {
   static const checkerValidateProductBarcode =
       '/checker/validate-product-barcode';
   static const checkerApproveOrder = '/checker/approve-order';
+  // Notifications
+  static const notification = '/notification';
+  static const notificationLowStock = '/notification/low-stock';
+  static const notificationMarkRead = '/notification';
 }
