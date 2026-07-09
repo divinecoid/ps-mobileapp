@@ -345,6 +345,7 @@ class CheckerScanTab extends StatelessWidget {
     required this.torchEnabled,
     required this.onToggleTorch,
     required this.onFlipCamera,
+    this.lastDetected,
   });
 
   final MobileScannerController? controller;
@@ -352,92 +353,135 @@ class CheckerScanTab extends StatelessWidget {
   final bool torchEnabled;
   final VoidCallback onToggleTorch;
   final VoidCallback onFlipCamera;
+  final String? lastDetected;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ColoredBox(
-          color: Colors.black,
-          child: MobileScanner(controller: controller, onDetect: onDetect),
-        ),
-        Positioned(
-          top: 12,
-          left: 12,
-          child: Material(
-            color: Colors.black54,
-            borderRadius: BorderRadius.circular(999),
-            child: IconButton(
-              onPressed: onToggleTorch,
-              icon: Icon(
-                torchEnabled ? Icons.flash_on : Icons.flash_off,
-                color: torchEnabled ? Colors.amberAccent : Colors.white,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Wide box sized for 1D barcodes instead of a QR-shaped square.
+        final boxWidth = constraints.maxWidth * 0.78;
+        final boxHeight = 110.0;
+        final left = (constraints.maxWidth - boxWidth) / 2;
+        final top = (constraints.maxHeight - boxHeight) / 2;
+        final scanWindow = Rect.fromLTWH(left, top, boxWidth, boxHeight);
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(
+              color: Colors.black,
+              child: MobileScanner(
+                controller: controller,
+                onDetect: onDetect,
+                scanWindow: scanWindow,
               ),
             ),
-          ),
-        ),
-        Positioned(
-          top: 12,
-          right: 12,
-          child: Material(
-            color: Colors.black54,
-            borderRadius: BorderRadius.circular(999),
-            child: IconButton(
-              onPressed: onFlipCamera,
-              icon: const Icon(Icons.flip_camera_ios, color: Colors.white),
-            ),
-          ),
-        ),
-        Center(
-          child: Container(
-            width: 220,
-            height: 220,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.9),
-                width: 2,
+            Positioned(
+              top: 12,
+              left: 12,
+              child: Material(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(999),
+                child: IconButton(
+                  onPressed: onToggleTorch,
+                  icon: Icon(
+                    torchEnabled ? Icons.flash_on : Icons.flash_off,
+                    color: torchEnabled ? Colors.amberAccent : Colors.white,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        Positioned(
-          left: 20,
-          right: 20,
-          bottom: 22,
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(14),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Material(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(999),
+                child: IconButton(
+                  onPressed: onFlipCamera,
+                  icon: const Icon(Icons.flip_camera_ios, color: Colors.white),
+                ),
+              ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Scan product QR code',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+            Positioned(
+              left: left,
+              top: top,
+              child: Container(
+                width: boxWidth,
+                height: boxHeight,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    width: 2,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Point the camera at the QR code to validate item sequence',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 12,
+              ),
+            ),
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: lastDetected == null ? 22 : 64,
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Scan product barcode',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Align the barcode inside the box, holding steady about 15-20cm away',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (lastDetected != null)
+              Positioned(
+                left: 20,
+                right: 20,
+                bottom: 20,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    'Last read: $lastDetected',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-        ),
-      ],
+              ),
+          ],
+        );
+      },
     );
   }
 }

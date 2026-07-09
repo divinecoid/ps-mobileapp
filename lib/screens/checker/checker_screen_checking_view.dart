@@ -80,6 +80,7 @@ extension _CheckerScreenCheckingViewExtension on _CheckerScreenState {
       torchEnabled: _torchEnabled,
       onToggleTorch: _toggleTorch,
       onFlipCamera: _flipCamera,
+      lastDetected: _lastDetected,
     );
   }
 

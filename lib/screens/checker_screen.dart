@@ -37,6 +37,7 @@ class _CheckerScreenState extends State<CheckerScreen>
   bool _isProcessingScan = false;
   bool _torchEnabled = false;
   String _errorMessage = '';
+  String? _lastDetected;
 
   String? _selectedOrderId;
   Map<String, dynamic>? _selectedOrder;
@@ -299,9 +300,21 @@ class _CheckerScreenState extends State<CheckerScreen>
 
   Future<void> _scanSerialAndOpenOrder() async {
     final scannerController = MobileScannerController(
-      detectionSpeed: DetectionSpeed.normal,
+      detectionSpeed: DetectionSpeed.noDuplicates,
       facing: CameraFacing.back,
       torchEnabled: false,
+      cameraResolution: const Size(1920, 1080),
+      formats: const [
+        BarcodeFormat.code128,
+        BarcodeFormat.code39,
+        BarcodeFormat.code93,
+        BarcodeFormat.codabar,
+        BarcodeFormat.ean13,
+        BarcodeFormat.ean8,
+        BarcodeFormat.itf,
+        BarcodeFormat.upcA,
+        BarcodeFormat.upcE,
+      ],
     );
 
     var torchEnabled = false;
@@ -442,7 +455,7 @@ class _CheckerScreenState extends State<CheckerScreen>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               const Text(
-                                'Scan order QR code',
+                                'Scan order barcode',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: Colors.white,
@@ -452,7 +465,7 @@ class _CheckerScreenState extends State<CheckerScreen>
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Point the camera at the QR code to open the order automatically',
+                                'Point the camera at the barcode to open the order automatically',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.8),
@@ -481,26 +494,22 @@ class _CheckerScreenState extends State<CheckerScreen>
     _scannerController?.dispose();
 
     _scannerController = MobileScannerController(
-      detectionSpeed: DetectionSpeed.normal,
+      detectionSpeed: DetectionSpeed.noDuplicates,
       facing: CameraFacing.back,
       torchEnabled: false,
+      cameraResolution: const Size(1920, 1080),
+      formats: const [
+        BarcodeFormat.code128,
+        BarcodeFormat.code39,
+        BarcodeFormat.code93,
+        BarcodeFormat.codabar,
+        BarcodeFormat.ean13,
+        BarcodeFormat.ean8,
+        BarcodeFormat.itf,
+        BarcodeFormat.upcA,
+        BarcodeFormat.upcE,
+      ],
     );
-
-    _tabController?.addListener(() {
-      if (_tabController!.index == 0) {
-        _scannerController?.start();
-      } else {
-        _scannerController?.stop();
-      }
-    });
-
-    // Only start the camera if the Scan tab is active.
-    if (_tabController?.index == 0) {
-      _scannerController?.start();
-    } else {
-      _scannerController?.stop();
-    }
-    setState(() => _torchEnabled = false);
   }
 
   void _toggleTorch() {
@@ -555,15 +564,17 @@ class _CheckerScreenState extends State<CheckerScreen>
   }
 
   Future<void> _handleBarcodeDetect(BarcodeCapture capture) async {
-    if (_isProcessingScan ||
-        _tabController?.index != 0 ||
-        _selectedOrderId == null)
-      return;
+  if (_isProcessingScan ||
+      _tabController?.index != 0 ||
+      _selectedOrderId == null)
+    return;
 
-    final code = capture.barcodes.firstOrNull?.rawValue;
-    if (code == null || code.isEmpty) return;
+  final code = capture.barcodes.firstOrNull?.rawValue;
+  if (code == null || code.isEmpty) return;
 
-    _isProcessingScan = true;
+  setState(() => _lastDetected = code); // NEW: shows what was actually decoded
+
+  _isProcessingScan = true;
 
     try {
       final response = await CheckerService.validateProductBarcode(
@@ -576,7 +587,7 @@ class _CheckerScreenState extends State<CheckerScreen>
       if (response['success'] != true || response['data'] == null) {
         Toast.show(
           context,
-          response['message']?.toString() ?? 'QR code tidak valid',
+          response['message']?.toString() ?? 'Barcode tidak valid',
           isError: true,
         );
         return;
@@ -587,7 +598,7 @@ class _CheckerScreenState extends State<CheckerScreen>
       if (sequence == null) {
         Toast.show(
           context,
-          response['message']?.toString() ?? 'QR code not found or invalid',
+          response['message']?.toString() ?? 'Barcode not found or invalid',
           isError: true,
         );
         return;
