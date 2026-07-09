@@ -430,10 +430,10 @@ class _CheckerScreenState extends State<CheckerScreen>
                       ),
                       Center(
                         child: Container(
-                          width: 220,
-                          height: 220,
+                          width: 320,
+                          height: 110,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(18),
+                            borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                               color: Colors.white.withValues(alpha: 0.9),
                               width: 2,
