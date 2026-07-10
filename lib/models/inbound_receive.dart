@@ -1,5 +1,13 @@
 import 'package:intl/intl.dart';
 
+int? _parseInt(dynamic value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is String) return int.tryParse(value);
+  if (value is double) return value.toInt();
+  return null;
+}
+
 /// Model untuk detail barcode dalam inbound receive
 class InboundReceiveDetail {
   final String barcode;
@@ -30,7 +38,7 @@ class InboundReceiveDetail {
       color: json['color'] as String?,
       size: json['size'] as String?,
       serialNumber: json['serial_number'] as String?,
-      qty: json['qty'] as int? ?? 1,
+      qty: _parseInt(json['qty']) ?? 1,
       isReject: json['is_reject'] as bool? ?? false,
     );
   }
@@ -60,7 +68,7 @@ class InboundSummary {
       color: json['color'] as String?,
       size: json['size'] as String?,
       serialNumber: json['serial_number'] as String?,
-      totalQty: json['total_qty'] as int? ?? 0,
+      totalQty: _parseInt(json['total_qty']) ?? 0,
       isReject: json['is_reject'] as bool? ?? false,
     );
   }
@@ -205,7 +213,7 @@ class InboundReceive {
       userName: json['name'] as String? ?? 'Unknown',
       receivedDate: DateTime.parse(json['received_date'] as String),
       cmtInfo: cmtInfo,
-      totalItemsFromApi: json['items'] as int? ?? 0,
+      totalItemsFromApi: _parseInt(json['items']) ?? 0,
       details: [],
     );
   }

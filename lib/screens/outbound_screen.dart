@@ -82,7 +82,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
         final orderData = response['data']['order'];
 
         // Check if order is already prepared
-        if (orderData['readytoship_at'] != null) {
+        if (orderData['status'] != 'ready_to_pickup') {
           if (mounted) {
             if (showScannerToast != null) {
               showScannerToast(
