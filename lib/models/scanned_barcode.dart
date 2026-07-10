@@ -31,8 +31,8 @@ class ScannedBarcode {
   }
 
   bool isPiece() {
-    bool isPiece = barcode.split('|')[5].trim() == 'PIECE';
-    return isPiece;
+    final type = barcode.split('|')[5].trim();
+    return type == 'PIECE' || type == 'P';
   }
 
   // Validate if barcode matches expected variant
