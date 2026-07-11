@@ -382,9 +382,9 @@ class _CheckerScanTabState extends State<CheckerScanTab> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Wide box sized for 1D barcodes instead of a QR-shaped square.
-        final boxWidth = constraints.maxWidth * 0.78;
-        final boxHeight = 110.0;
+        // Square box sized for QR codes instead of a wide 1D barcode frame.
+        final boxWidth = constraints.maxWidth * 0.72;
+        final boxHeight = boxWidth;
         final left = (constraints.maxWidth - boxWidth) / 2;
         final top = (constraints.maxHeight - boxHeight) / 2 - 40; // shift up slightly to make room for text input
         final scanWindow = Rect.fromLTWH(left, top, boxWidth, boxHeight);
@@ -467,7 +467,7 @@ class _CheckerScanTabState extends State<CheckerScanTab> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Barcode Produk',
+                          'QR Code Produk',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.9),
                             fontSize: 13,
@@ -488,7 +488,7 @@ class _CheckerScanTabState extends State<CheckerScanTab> {
                         onSubmitted: (_) => _submitManual(),
                         style: const TextStyle(color: Colors.white, fontSize: 13),
                         decoration: InputDecoration(
-                          hintText: 'Masukkan atau scan barcode produk',
+                          hintText: 'Masukkan atau scan QR code produk',
                           hintStyle: TextStyle(
                             color: Colors.white.withValues(alpha: 0.4),
                             fontSize: 13,

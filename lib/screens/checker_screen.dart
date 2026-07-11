@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -176,7 +178,18 @@ class _CheckerScreenState extends State<CheckerScreen>
       if (response['success'] == true && response['data'] != null) {
         final data = response['data'] as Map<String, dynamic>;
         final items = List<dynamic>.from((data['data'] as List?) ?? const []);
-        final totalPages = (data['last_page'] as num?)?.toInt() ?? 1;
+        var totalPages = (data['last_page'] as num?)?.toInt() ?? 1;
+
+        if (items.isEmpty && _isFilterActive) {
+          final fallbackOrder = _findLocalAssignedOrderByOrderSn(
+            _searchQuery,
+            marketplaceId: _selectedMarketplaceId,
+          );
+          if (fallbackOrder != null) {
+            items.add(fallbackOrder);
+            totalPages = 1;
+          }
+        }
 
         _ordersPageCache.putIfAbsent(key, () => {})[_currentPage] = items;
         _ordersTotalPagesCache[key] = totalPages;
@@ -197,6 +210,29 @@ class _CheckerScreenState extends State<CheckerScreen>
           _isListLoading = false;
         });
       } else {
+        final fallbackOrder = _isFilterActive
+            ? _findLocalAssignedOrderByOrderSn(
+                _searchQuery,
+                marketplaceId: _selectedMarketplaceId,
+              )
+            : null;
+
+        if (fallbackOrder != null) {
+          _ordersPageCache.putIfAbsent(key, () => {})[_currentPage] = [fallbackOrder];
+          _ordersTotalPagesCache[key] = 1;
+
+          setState(() {
+            _assignedOrders
+              ..clear()
+              ..add(fallbackOrder);
+            _totalPages = 1;
+            _extractAvailableMarketplaces();
+            _isListLoading = false;
+            _errorMessage = '';
+          });
+          return;
+        }
+
         setState(() {
           _errorMessage =
               response['message'] ?? 'Failed to load checker orders';
@@ -244,6 +280,48 @@ class _CheckerScreenState extends State<CheckerScreen>
 
   List<dynamic> _getFilteredOrders() {
     return _assignedOrders;
+  }
+
+  Map<String, dynamic>? _findLocalAssignedOrderByOrderSn(
+    String orderSn, {
+    String? marketplaceId,
+  }) {
+    final normalizedSn = orderSn.trim().toLowerCase();
+    if (normalizedSn.isEmpty) return null;
+
+    for (final raw in _assignedOrders) {
+      if (raw is! Map<String, dynamic>) continue;
+      final itemSn = raw['order_sn']?.toString().toLowerCase() ?? '';
+      if (itemSn != normalizedSn) continue;
+
+      if (marketplaceId != null && marketplaceId.isNotEmpty) {
+        final itemMarketplaceId =
+            raw['marketplace']?['id']?.toString() ?? '';
+        if (itemMarketplaceId != marketplaceId) continue;
+      }
+
+      return raw;
+    }
+
+    for (final pageMap in _ordersPageCache.values) {
+      for (final page in pageMap.values) {
+        for (final raw in page) {
+          if (raw is! Map<String, dynamic>) continue;
+          final itemSn = raw['order_sn']?.toString().toLowerCase() ?? '';
+          if (itemSn != normalizedSn) continue;
+
+          if (marketplaceId != null && marketplaceId.isNotEmpty) {
+            final itemMarketplaceId =
+                raw['marketplace']?['id']?.toString() ?? '';
+            if (itemMarketplaceId != marketplaceId) continue;
+          }
+
+          return raw;
+        }
+      }
+    }
+
+    return null;
   }
 
   Future<void> _performSearch() async {
@@ -327,8 +405,10 @@ class _CheckerScreenState extends State<CheckerScreen>
 
       if (!mounted) return;
 
+      final parentContext = context;
+
       await showDialog<void>(
-        context: context,
+        context: parentContext,
         barrierDismissible: true,
         builder: (dialogContext) {
           return Dialog(
@@ -371,8 +451,20 @@ class _CheckerScreenState extends State<CheckerScreen>
                         );
 
                         if (items.isEmpty) {
+                          final fallbackOrder = _findLocalAssignedOrderByOrderSn(
+                            serial,
+                            marketplaceId: _selectedMarketplaceId,
+                          );
+                          if (fallbackOrder != null) {
+                            if (Navigator.of(parentContext).canPop()) {
+                              Navigator.of(parentContext).pop();
+                            }
+                            await _openOrderForChecking(fallbackOrder);
+                            return;
+                          }
+
                           Toast.show(
-                            context,
+                            parentContext,
                             'Order tidak ditemukan atau tidak perlu checker',
                             isError: true,
                           );
@@ -383,22 +475,22 @@ class _CheckerScreenState extends State<CheckerScreen>
                           items.first as Map,
                         );
 
-                        if (Navigator.of(dialogContext).canPop()) {
-                          Navigator.of(dialogContext).pop();
+                        if (Navigator.of(parentContext).canPop()) {
+                          Navigator.of(parentContext).pop();
                         }
                         await _openOrderForChecking(order);
                         return;
                       }
 
                       Toast.show(
-                        context,
+                        dialogContext,
                         response['message']?.toString() ??
                             'Order tidak ditemukan',
                         isError: true,
                       );
                     } catch (error) {
                       if (!mounted) return;
-                      Toast.show(context, 'Error: $error', isError: true);
+                      Toast.show(parentContext, 'Error: $error', isError: true);
                     } finally {
                       isProcessingScan = false;
                     }
@@ -526,6 +618,13 @@ class _CheckerScreenState extends State<CheckerScreen>
         _serialInputController.clear();
         await _openOrderForChecking(order);
       } else {
+        final fallbackOrder = _findLocalAssignedOrderByOrderSn(cleanSerial);
+        if (fallbackOrder != null) {
+          _serialInputController.clear();
+          await _openOrderForChecking(fallbackOrder);
+          return;
+        }
+
         Toast.show(
           context,
           response['message']?.toString() ?? 'Serial number tidak ditemukan',
@@ -551,17 +650,7 @@ class _CheckerScreenState extends State<CheckerScreen>
       facing: CameraFacing.back,
       torchEnabled: false,
       cameraResolution: const Size(1920, 1080),
-      formats: const [
-        BarcodeFormat.code128,
-        BarcodeFormat.code39,
-        BarcodeFormat.code93,
-        BarcodeFormat.codabar,
-        BarcodeFormat.ean13,
-        BarcodeFormat.ean8,
-        BarcodeFormat.itf,
-        BarcodeFormat.upcA,
-        BarcodeFormat.upcE,
-      ],
+      formats: const [BarcodeFormat.qrCode],
     );
   }
 
@@ -619,8 +708,9 @@ class _CheckerScreenState extends State<CheckerScreen>
   Future<void> _processProductBarcode(String code) async {
     if (_isProcessingScan ||
         _tabController?.index != 0 ||
-        _selectedOrderId == null)
+        _selectedOrderId == null) {
       return;
+    }
 
     if (code.isEmpty) return;
 
