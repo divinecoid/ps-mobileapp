@@ -146,9 +146,12 @@ class OrderService {
   }
 
   /// GET /outbound/assigned-orders → Get orders assigned to me
-  static Future<List<Map<String, dynamic>>> getAssignedOrders() async {
+  static Future<List<Map<String, dynamic>>> getAssignedOrders({bool? isPrepared}) async {
     try {
-      final response = await ApiClient.dio.get(Endpoint.outboundAssignedOrders);
+      final response = await ApiClient.dio.get(
+        Endpoint.outboundAssignedOrders,
+        queryParameters: isPrepared != null ? {'is_prepared': isPrepared.toString()} : null,
+      );
 
       final data = response.data;
 
@@ -165,6 +168,9 @@ class OrderService {
               'status': (m['status'] ?? '-').toString(),
               'awb_code': (m['awb_code'] ?? '-').toString(),
               'notes': (m['notes'] ?? '-').toString(),
+              'prepared_at': (m['prepared_at'] ?? '').toString(),
+              'readytoship_at': (m['readytoship_at'] ?? '').toString(),
+              'prepare_duration': (m['prepare_duration'] ?? 0).toString(),
             };
           }).toList();
         }

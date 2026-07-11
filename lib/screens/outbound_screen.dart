@@ -8,6 +8,7 @@ import '../api/outbound_service.dart';
 import '../api/order_service.dart';
 import '../utils/navigation_helper.dart';
 import 'scan_product_group_screen.dart';
+import 'outbound_list_screen.dart';
 
 class OutboundScreen extends StatefulWidget {
   const OutboundScreen({super.key});
@@ -561,6 +562,20 @@ class _OutboundScreenState extends State<OutboundScreen> {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history, color: Colors.white),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const OutboundListScreen(),
+                ),
+              );
+            },
+            tooltip: 'History Outbound',
+          ),
+        ],
       ),
       drawer: AppDrawer(onMenuSelected: _handleMenuSelection),
       body: SafeArea(

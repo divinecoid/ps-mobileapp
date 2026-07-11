@@ -29,7 +29,7 @@ class _MyOrderScreenState extends State<MyOrderScreen> {
     });
 
     try {
-      final orders = await OrderService.getAssignedOrders();
+      final orders = await OrderService.getAssignedOrders(isPrepared: false);
       setState(() {
         _myOrders = orders;
         _isLoading = false;
