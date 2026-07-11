@@ -616,14 +616,13 @@ class _CheckerScreenState extends State<CheckerScreen>
         .length;
   }
 
-  Future<void> _handleBarcodeDetect(BarcodeCapture capture) async {
+  Future<void> _processProductBarcode(String code) async {
     if (_isProcessingScan ||
         _tabController?.index != 0 ||
         _selectedOrderId == null)
       return;
 
-    final code = capture.barcodes.firstOrNull?.rawValue;
-    if (code == null || code.isEmpty) return;
+    if (code.isEmpty) return;
 
     setState(
       () => _lastDetected = code,
