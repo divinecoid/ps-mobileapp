@@ -337,7 +337,7 @@ class CheckerCheckingTabBar extends StatelessWidget {
   }
 }
 
-class CheckerScanTab extends StatelessWidget {
+class CheckerScanTab extends StatefulWidget {
   const CheckerScanTab({
     super.key,
     required this.controller,
@@ -345,6 +345,7 @@ class CheckerScanTab extends StatelessWidget {
     required this.torchEnabled,
     required this.onToggleTorch,
     required this.onFlipCamera,
+    required this.onManualSubmit,
     this.lastDetected,
   });
 
@@ -353,7 +354,29 @@ class CheckerScanTab extends StatelessWidget {
   final bool torchEnabled;
   final VoidCallback onToggleTorch;
   final VoidCallback onFlipCamera;
+  final void Function(String barcode) onManualSubmit;
   final String? lastDetected;
+
+  @override
+  State<CheckerScanTab> createState() => _CheckerScanTabState();
+}
+
+class _CheckerScanTabState extends State<CheckerScanTab> {
+  final TextEditingController _textController = TextEditingController();
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  void _submitManual() {
+    final code = _textController.text.trim();
+    if (code.isNotEmpty) {
+      widget.onManualSubmit(code);
+      _textController.clear();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -363,7 +386,7 @@ class CheckerScanTab extends StatelessWidget {
         final boxWidth = constraints.maxWidth * 0.78;
         final boxHeight = 110.0;
         final left = (constraints.maxWidth - boxWidth) / 2;
-        final top = (constraints.maxHeight - boxHeight) / 2;
+        final top = (constraints.maxHeight - boxHeight) / 2 - 40; // shift up slightly to make room for text input
         final scanWindow = Rect.fromLTWH(left, top, boxWidth, boxHeight);
 
         return Stack(
@@ -372,8 +395,8 @@ class CheckerScanTab extends StatelessWidget {
             ColoredBox(
               color: Colors.black,
               child: MobileScanner(
-                controller: controller,
-                onDetect: onDetect,
+                controller: widget.controller,
+                onDetect: widget.onDetect,
                 scanWindow: scanWindow,
               ),
             ),
@@ -384,10 +407,10 @@ class CheckerScanTab extends StatelessWidget {
                 color: Colors.black54,
                 borderRadius: BorderRadius.circular(999),
                 child: IconButton(
-                  onPressed: onToggleTorch,
+                  onPressed: widget.onToggleTorch,
                   icon: Icon(
-                    torchEnabled ? Icons.flash_on : Icons.flash_off,
-                    color: torchEnabled ? Colors.amberAccent : Colors.white,
+                    widget.torchEnabled ? Icons.flash_on : Icons.flash_off,
+                    color: widget.torchEnabled ? Colors.amberAccent : Colors.white,
                   ),
                 ),
               ),
@@ -399,7 +422,7 @@ class CheckerScanTab extends StatelessWidget {
                 color: Colors.black54,
                 borderRadius: BorderRadius.circular(999),
                 child: IconButton(
-                  onPressed: onFlipCamera,
+                  onPressed: widget.onFlipCamera,
                   icon: const Icon(Icons.flip_camera_ios, color: Colors.white),
                 ),
               ),
@@ -419,66 +442,88 @@ class CheckerScanTab extends StatelessWidget {
                 ),
               ),
             ),
+            // Floating Overlay Card at the bottom containing the input field
             Positioned(
-              left: 20,
-              right: 20,
-              bottom: lastDetected == null ? 22 : 64,
+              left: 16,
+              right: 16,
+              bottom: 16,
               child: Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(14),
+                  color: Colors.black.withValues(alpha: 0.78),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white24, width: 0.5),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Scan product barcode',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.qr_code_2,
+                          color: Color(0xFF1565C0),
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Barcode Produk',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black38,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white30),
+                      ),
+                      child: TextField(
+                        controller: _textController,
+                        onSubmitted: (_) => _submitManual(),
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Masukkan atau scan barcode produk',
+                          hintStyle: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.4),
+                            fontSize: 13,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 14,
+                          ),
+                          border: InputBorder.none,
+                          suffixIcon: IconButton(
+                            icon: const Icon(
+                              Icons.send,
+                              color: Color(0xFF1565C0),
+                              size: 18,
+                            ),
+                            onPressed: _submitManual,
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Align the barcode inside the box, holding steady about 15-20cm away',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 12,
+                    if (widget.lastDetected != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Last read: ${widget.lastDetected}',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
             ),
-            if (lastDetected != null)
-              Positioned(
-                left: 20,
-                right: 20,
-                bottom: 20,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    'Last read: $lastDetected',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.85),
-                      fontSize: 11,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ),
-              ),
           ],
         );
       },

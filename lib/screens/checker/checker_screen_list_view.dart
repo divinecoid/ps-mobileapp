@@ -50,6 +50,8 @@ extension _CheckerScreenListViewExtension on _CheckerScreenState {
         });
         _performSearch();
       },
+      serialController: _serialInputController,
+      onSerialSubmitted: _openOrderWithSerial,
       onScanQr: _scanSerialAndOpenOrder,
     );
   }

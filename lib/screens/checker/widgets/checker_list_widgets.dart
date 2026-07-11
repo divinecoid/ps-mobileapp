@@ -242,6 +242,8 @@ class CheckerSearchFilterCard extends StatelessWidget {
     required this.availableMarketplaces,
     required this.selectedMarketplaceId,
     required this.onMarketplaceChanged,
+    required this.serialController,
+    required this.onSerialSubmitted,
     required this.onScanQr,
   });
 
@@ -255,6 +257,8 @@ class CheckerSearchFilterCard extends StatelessWidget {
   final String? selectedMarketplaceId;
   final ValueChanged<String?> onMarketplaceChanged;
 
+  final TextEditingController serialController;
+  final ValueChanged<String> onSerialSubmitted;
   final VoidCallback onScanQr;
 
   @override
@@ -368,109 +372,97 @@ class CheckerSearchFilterCard extends StatelessWidget {
               ),
             ],
           ),
+          if (availableMarketplaces.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: DropdownButton<String>(
+                isExpanded: true,
+                underline: const SizedBox.shrink(),
+                value: selectedMarketplaceId,
+                icon: Icon(
+                  Icons.keyboard_arrow_down,
+                  size: 18,
+                  color: Colors.grey.shade500,
+                ),
+                hint: Row(
+                  children: [
+                    Icon(
+                      Icons.storefront_outlined,
+                      size: 15,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'All Marketplaces',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+                  ],
+                ),
+                selectedItemBuilder: (_) => [
+                  _buildDropdownSelectedItem('All Marketplaces'),
+                  ...availableMarketplaces.map(
+                    (m) => _buildDropdownSelectedItem(
+                      m['name']?.toString() ?? '-',
+                    ),
+                  ),
+                ],
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: null,
+                    child: Text('All Marketplaces'),
+                  ),
+                  ...availableMarketplaces.map(
+                    (m) => DropdownMenuItem<String>(
+                      value: m['id']?.toString(),
+                      child: Text(m['name']?.toString() ?? '-'),
+                    ),
+                  ),
+                ],
+                onChanged: onMarketplaceChanged,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
-          Row(
-            children: [
-              if (availableMarketplaces.isNotEmpty)
-                Expanded(
-                  child: SizedBox(
-                    height: 44,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: DropdownButton<String>(
-                        isExpanded: true,
-                        underline: const SizedBox.shrink(),
-                        value: selectedMarketplaceId,
-                        icon: Icon(
-                          Icons.keyboard_arrow_down,
-                          size: 18,
-                          color: Colors.grey.shade500,
-                        ),
-                        hint: Row(
-                          children: [
-                            Icon(
-                              Icons.storefront_outlined,
-                              size: 15,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'All Marketplaces',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey.shade400,
-                              ),
-                            ),
-                          ],
-                        ),
-                        selectedItemBuilder: (_) => [
-                          _buildDropdownSelectedItem('All Marketplaces'),
-                          ...availableMarketplaces.map(
-                            (m) => _buildDropdownSelectedItem(
-                              m['name']?.toString() ?? '-',
-                            ),
-                          ),
-                        ],
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text('All Marketplaces'),
-                          ),
-                          ...availableMarketplaces.map(
-                            (m) => DropdownMenuItem<String>(
-                              value: m['id']?.toString(),
-                              child: Text(m['name']?.toString() ?? '-'),
-                            ),
-                          ),
-                        ],
-                        onChanged: onMarketplaceChanged,
-                      ),
-                    ),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: TextField(
+              controller: serialController,
+              onSubmitted: onSerialSubmitted,
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Masukkan atau scan kode resi/serial',
+                hintStyle: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade400,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 14,
+                ),
+                border: InputBorder.none,
+                suffixIcon: IconButton(
+                  icon: const Icon(
+                    Icons.qr_code_scanner,
+                    color: Color(0xFF1565C0),
+                    size: 20,
                   ),
-                )
-              else
-                const Expanded(child: SizedBox.shrink()),
-              const SizedBox(width: 8),
-              Expanded(
-                child: InkWell(
-                  onTap: onScanQr,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    height: 44,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1565C0),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.qr_code_scanner,
-                          size: 16,
-                          color: Colors.white,
-                        ),
-                        SizedBox(width: 6),
-                        Text(
-                          'Scan QR',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  onPressed: onScanQr,
                 ),
               ),
-            ],
+            ),
           ),
         ],
       ),

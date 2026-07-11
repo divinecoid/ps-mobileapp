@@ -57,6 +57,7 @@ class _CheckerScreenState extends State<CheckerScreen>
   // Search filter
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _serialInputController = TextEditingController();
 
   TabController? _tabController;
   MobileScannerController? _scannerController;
@@ -74,6 +75,7 @@ class _CheckerScreenState extends State<CheckerScreen>
     _tabController?.dispose();
     _scannerController?.dispose();
     _searchController.dispose();
+    _serialInputController.dispose();
     super.dispose();
   }
 
@@ -490,6 +492,39 @@ class _CheckerScreenState extends State<CheckerScreen>
     }
   }
 
+  Future<void> _openOrderWithSerial(String serial) async {
+    final cleanSerial = serial.trim();
+    if (cleanSerial.isEmpty) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await CheckerService.getOrderBySerial(cleanSerial);
+
+      if (!mounted) return;
+
+      if (response['success'] == true && response['data'] != null) {
+        final order = Map<String, dynamic>.from(response['data'] as Map);
+        _serialInputController.clear();
+        await _openOrderForChecking(order);
+      } else {
+        Toast.show(
+          context,
+          response['message']?.toString() ?? 'Serial number tidak ditemukan',
+          isError: true,
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        Toast.show(context, 'Error: $error', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   void _initializeScanner() {
     _scannerController?.dispose();
 
@@ -563,18 +598,17 @@ class _CheckerScreenState extends State<CheckerScreen>
         .length;
   }
 
-  Future<void> _handleBarcodeDetect(BarcodeCapture capture) async {
-  if (_isProcessingScan ||
-      _tabController?.index != 0 ||
-      _selectedOrderId == null)
-    return;
+  Future<void> _processProductBarcode(String code) async {
+    if (_isProcessingScan ||
+        _tabController?.index != 0 ||
+        _selectedOrderId == null)
+      return;
 
-  final code = capture.barcodes.firstOrNull?.rawValue;
-  if (code == null || code.isEmpty) return;
+    if (code.isEmpty) return;
 
-  setState(() => _lastDetected = code); // NEW: shows what was actually decoded
+    setState(() => _lastDetected = code); // NEW: shows what was actually decoded
 
-  _isProcessingScan = true;
+    _isProcessingScan = true;
 
     try {
       final response = await CheckerService.validateProductBarcode(
@@ -656,6 +690,12 @@ class _CheckerScreenState extends State<CheckerScreen>
     } finally {
       _isProcessingScan = false;
     }
+  }
+
+  Future<void> _handleBarcodeDetect(BarcodeCapture capture) async {
+    final code = capture.barcodes.firstOrNull?.rawValue?.trim();
+    if (code == null || code.isEmpty) return;
+    await _processProductBarcode(code);
   }
 
   Future<void> _approveOrder() async {
