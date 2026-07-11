@@ -352,17 +352,35 @@ class _CheckerScreenState extends State<CheckerScreen>
 
                     isProcessingScan = true;
                     try {
-                      final response = await CheckerService.getOrderBySerial(
-                        serial,
+                      final response = await CheckerService.searchOrders(
+                        search: serial,
+                        perPage: 1,
                       );
 
                       if (!mounted) return;
 
                       if (response['success'] == true &&
                           response['data'] != null) {
-                        final order = Map<String, dynamic>.from(
+                        final data = Map<String, dynamic>.from(
                           response['data'] as Map,
                         );
+                        final items = List<dynamic>.from(
+                          (data['data'] as List?) ?? const [],
+                        );
+
+                        if (items.isEmpty) {
+                          Toast.show(
+                            context,
+                            'Order tidak ditemukan atau tidak perlu checker',
+                            isError: true,
+                          );
+                          return;
+                        }
+
+                        final order = Map<String, dynamic>.from(
+                          items.first as Map,
+                        );
+
                         if (Navigator.of(dialogContext).canPop()) {
                           Navigator.of(dialogContext).pop();
                         }
@@ -373,7 +391,7 @@ class _CheckerScreenState extends State<CheckerScreen>
                       Toast.show(
                         context,
                         response['message']?.toString() ??
-                            'Serial number tidak ditemukan',
+                            'Order tidak ditemukan',
                         isError: true,
                       );
                     } catch (error) {
@@ -564,17 +582,19 @@ class _CheckerScreenState extends State<CheckerScreen>
   }
 
   Future<void> _handleBarcodeDetect(BarcodeCapture capture) async {
-  if (_isProcessingScan ||
-      _tabController?.index != 0 ||
-      _selectedOrderId == null)
-    return;
+    if (_isProcessingScan ||
+        _tabController?.index != 0 ||
+        _selectedOrderId == null)
+      return;
 
-  final code = capture.barcodes.firstOrNull?.rawValue;
-  if (code == null || code.isEmpty) return;
+    final code = capture.barcodes.firstOrNull?.rawValue;
+    if (code == null || code.isEmpty) return;
 
-  setState(() => _lastDetected = code); // NEW: shows what was actually decoded
+    setState(
+      () => _lastDetected = code,
+    ); // NEW: shows what was actually decoded
 
-  _isProcessingScan = true;
+    _isProcessingScan = true;
 
     try {
       final response = await CheckerService.validateProductBarcode(
