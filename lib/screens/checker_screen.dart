@@ -8,6 +8,7 @@ import '../components/app_drawer.dart';
 import '../components/toast.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/navigation_helper.dart';
+import '../utils/sku_parser.dart';
 
 import 'checker/widgets/checker_checking_widgets.dart';
 import 'checker/widgets/checker_list_widgets.dart';
@@ -747,55 +748,90 @@ class _CheckerScreenState extends State<CheckerScreen>
         );
         return;
       }
+
+      // Parse the SKU to handle bundles
       final sku = data['sku']?.toString() ?? '';
-      final color = data['color']?.toString() ?? '';
-      final size = data['size']?.toString() ?? '';
-      final itemName = data['item_name']?.toString() ?? '-';
+      final parsedSkus = SkuParser.parseSku(
+        sku,
+        warnaString: data['warna_string']?.toString() ?? '',
+        ukuran: data['size']?.toString(),
+      );
 
-      if (!_isSequenceUnique(sku, sequence)) {
+      if (parsedSkus.isEmpty) {
         Toast.show(
           context,
-          'Sequence $sequence sudah pernah di-scan untuk $sku',
+          'Gagal mem-parse SKU: $sku',
           isError: true,
         );
         return;
       }
 
-      final requiredQty = _requiredQtyForKey(sku, color, size);
-      final scannedQty = _scannedQtyForKey(sku, color, size);
+      // Check each parsed item
+      final itemsToAdd = <Map<String, dynamic>>[];
+      for (final parsedSku in parsedSkus) {
+        final color = parsedSku.warna ?? '';
+        final size = parsedSku.ukuran ?? '';
+        final itemName = data['item_name']?.toString() ?? '-';
+        final logo = parsedSku.logo;
 
-      if (requiredQty == 0) {
-        Toast.show(
-          context,
-          'Produk tidak ditemukan di order ini',
-          isError: true,
-        );
-        return;
-      }
+        final requiredQty = _requiredQtyForKey(parsedSku.sku, color, size);
+        final scannedQty = _scannedQtyForKey(parsedSku.sku, color, size);
 
-      if (scannedQty >= requiredQty) {
-        Toast.show(
-          context,
-          'Qty maksimum untuk $sku sudah tercapai ($requiredQty)',
-          isError: true,
-        );
-        return;
-      }
+        if (requiredQty == 0) {
+          Toast.show(
+            context,
+            'Produk tidak ditemukan di order ini: ${parsedSku.sku}',
+            isError: true,
+          );
+          return;
+        }
 
-      setState(() {
-        _scannedBarcodes.add(code);
-        _scannedItems.add({
-          'sku': sku,
+        if (scannedQty >= requiredQty) {
+          Toast.show(
+            context,
+            'Qty maksimum untuk ${parsedSku.sku} sudah tercapai ($requiredQty)',
+            isError: true,
+          );
+          return;
+        }
+
+        // Check if this specific variant is already scanned
+        if (!_isSequenceUnique(parsedSku.sku, '$sequence-${itemsToAdd.length}')) {
+          Toast.show(
+            context,
+            'Sequence $sequence sudah pernah di-scan untuk ${parsedSku.sku}',
+            isError: true,
+          );
+          return;
+        }
+
+        itemsToAdd.add({
+          'sku': parsedSku.sku,
           'color': color,
           'size': size,
           'item_name': itemName,
-          'sequence': sequence,
+          'logo': logo,
+          'sequence': '$sequence-${itemsToAdd.length}',
           'barcode': code,
           'scanned_at': DateTime.now().toIso8601String(),
         });
+      }
+
+      // Add all parsed items
+      setState(() {
+        _scannedBarcodes.add(code);
+        _scannedItems.addAll(itemsToAdd);
       });
 
-      Toast.show(context, '$itemName berhasil di-scan');
+      if (parsedSkus.length == 1) {
+        Toast.show(context, '${parsedSkus.first.sku} berhasil di-scan');
+      } else {
+        Toast.show(
+          context,
+          'Bundle berhasil di-scan (${parsedSkus.length} items)',
+        );
+      }
+
       _tabController?.animateTo(1);
     } finally {
       _isProcessingScan = false;
