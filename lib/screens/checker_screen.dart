@@ -356,8 +356,47 @@ class _CheckerScreenState extends State<CheckerScreen>
 
       if (response['success'] == true && response['data'] != null) {
         final data = response['data'] as Map<String, dynamic>;
+        final rawItems = List<dynamic>.from(data['items'] ?? []);
+
+        final List<dynamic> expandedItems = [];
+        for (var rawItem in rawItems) {
+          final item = rawItem is Map ? Map<String, dynamic>.from(rawItem) : <String, dynamic>{};
+          final sku = (item['sku'] ?? '').toString().trim();
+          final color = (item['color'] ?? '').toString().trim();
+          final size = (item['size'] ?? '').toString().trim();
+
+          final parsed = SkuParser.parseSku(sku, warnaString: color, ukuran: size);
+          if (parsed.isEmpty) {
+            expandedItems.add(item);
+          } else {
+            for (var p in parsed) {
+              final List<String> displayParts = [];
+              if (p.logo != null && p.logo!.isNotEmpty) {
+                displayParts.add(p.sku);
+                displayParts.add('(${p.logo})');
+              } else {
+                displayParts.add(p.sku);
+              }
+              if (p.warna != null && p.warna!.isNotEmpty) {
+                displayParts.add(p.warna!);
+              }
+              if (p.ukuran != null && p.ukuran!.isNotEmpty) {
+                displayParts.add(p.ukuran!);
+              }
+
+              expandedItems.add({
+                ...item,
+                'sku': p.sku,
+                'color': p.warna ?? '',
+                'size': p.ukuran ?? '',
+                'item_name': displayParts.join(' '),
+              });
+            }
+          }
+        }
+
         setState(() {
-          _orderItems = List<dynamic>.from(data['items'] ?? []);
+          _orderItems = expandedItems;
           _isLoading = false;
         });
         // Default to the items list tab so the checker can immediately see

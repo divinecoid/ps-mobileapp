@@ -67,7 +67,7 @@ class SkuParser {
       result.add(ParsedSku(
         sku: extra,
         logo: null,
-        warna: null,
+        warna: 'Hitam',
         ukuran: ukuran,
       ));
     }
