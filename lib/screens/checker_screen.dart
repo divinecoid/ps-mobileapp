@@ -711,38 +711,88 @@ class _CheckerScreenState extends State<CheckerScreen>
     return match?.group(1);
   }
 
-  bool _isSequenceUnique(String sku, String sequence) {
+  bool _isSequenceUnique(String sku, String color, String size, String sequence) {
+    final normalizedColor = _normalizeColor(color);
     return !_scannedItems.any(
-      (item) => item['sku'] == sku && item['sequence'] == sequence,
+      (item) {
+        final itemSku = item['sku']?.toString().toLowerCase();
+        final itemColor = _normalizeColor(item['color']?.toString() ?? '');
+        final itemSize = item['size']?.toString().toLowerCase();
+        final itemSequence = item['sequence'];
+        
+        return itemSku == sku.toLowerCase() &&
+            itemColor == normalizedColor &&
+            itemSize == size.toLowerCase() &&
+            itemSequence == sequence;
+      },
     );
   }
 
   int _requiredQtyForKey(String sku, String color, String size) {
+    final normalizedColor = _normalizeColor(color);
     return _orderItems
         .where(
-          (item) =>
-              (item['sku']?.toString().toLowerCase() ?? '') ==
-                  sku.toLowerCase() &&
-              (item['color']?.toString().toLowerCase() ?? '') ==
-                  color.toLowerCase() &&
-              (item['size']?.toString().toLowerCase() ?? '') ==
-                  size.toLowerCase(),
+          (item) {
+            final itemSku = item['sku']?.toString().toLowerCase() ?? '';
+            final itemColor = _normalizeColor(item['color']?.toString() ?? '');
+            final itemSize = item['size']?.toString().toLowerCase() ?? '';
+            
+            return itemSku == sku.toLowerCase() &&
+                itemColor == normalizedColor &&
+                itemSize == size.toLowerCase();
+          },
         )
         .length;
   }
 
   int _scannedQtyForKey(String sku, String color, String size) {
+    final normalizedColor = _normalizeColor(color);
     return _scannedItems
         .where(
-          (item) =>
-              (item['sku']?.toString().toLowerCase() ?? '') ==
-                  sku.toLowerCase() &&
-              (item['color']?.toString().toLowerCase() ?? '') ==
-                  color.toLowerCase() &&
-              (item['size']?.toString().toLowerCase() ?? '') ==
-                  size.toLowerCase(),
+          (item) {
+            final itemSku = item['sku']?.toString().toLowerCase() ?? '';
+            final itemColor = _normalizeColor(item['color']?.toString() ?? '');
+            final itemSize = item['size']?.toString().toLowerCase() ?? '';
+            
+            return itemSku == sku.toLowerCase() &&
+                itemColor == normalizedColor &&
+                itemSize == size.toLowerCase();
+          },
         )
         .length;
+  }
+
+  /// Normalize color to handle both English and Indonesian names
+  String _normalizeColor(String color) {
+    final lowerColor = color.toLowerCase().trim();
+    
+    // Map both English and Indonesian to a common normalized form
+    const colorMap = {
+      'black': 'hitam',
+      'hitam': 'hitam',
+      'white': 'putih',
+      'putih': 'putih',
+      'red': 'merah',
+      'merah': 'merah',
+      'blue': 'biru',
+      'biru': 'biru',
+      'green': 'hijau',
+      'hijau': 'hijau',
+      'yellow': 'kuning',
+      'kuning': 'kuning',
+      'gray': 'abu-abu',
+      'grey': 'abu-abu',
+      'abu-abu': 'abu-abu',
+      'brown': 'coklat',
+      'coklat': 'coklat',
+      'orange': 'oranye',
+      'oranye': 'oranye',
+      'purple': 'ungu',
+      'ungu': 'ungu',
+      'pink': 'pink',
+    };
+    
+    return colorMap[lowerColor] ?? lowerColor;
   }
 
   Future<void> _processProductBarcode(String code) async {
@@ -790,11 +840,24 @@ class _CheckerScreenState extends State<CheckerScreen>
 
       // Parse the SKU to handle bundles
       final sku = data['sku']?.toString() ?? '';
+      final warnaString = data['warna_string']?.toString() ?? '';
+      final ukuran = data['size']?.toString();
+      
+      print('DEBUG: Parsing SKU from backend response:');
+      print('  sku: $sku');
+      print('  warnaString: $warnaString');
+      print('  ukuran: $ukuran');
+      
       final parsedSkus = SkuParser.parseSku(
         sku,
-        warnaString: data['warna_string']?.toString() ?? '',
-        ukuran: data['size']?.toString(),
+        warnaString: warnaString,
+        ukuran: ukuran,
       );
+
+      print('DEBUG: Parsed SKUs count: ${parsedSkus.length}');
+      for (var i = 0; i < parsedSkus.length; i++) {
+        print('  [$i] sku=${parsedSkus[i].sku}, warna=${parsedSkus[i].warna}, ukuran=${parsedSkus[i].ukuran}');
+      }
 
       if (parsedSkus.isEmpty) {
         Toast.show(
@@ -813,10 +876,16 @@ class _CheckerScreenState extends State<CheckerScreen>
         final itemName = data['item_name']?.toString() ?? '-';
         final logo = parsedSku.logo;
 
+        print('DEBUG: Checking requiredQty for: sku=${parsedSku.sku}, color=$color, size=$size');
         final requiredQty = _requiredQtyForKey(parsedSku.sku, color, size);
+        print('DEBUG: requiredQty=$requiredQty');
         final scannedQty = _scannedQtyForKey(parsedSku.sku, color, size);
 
         if (requiredQty == 0) {
+          print('DEBUG: Order items:');
+          for (var item in _orderItems) {
+            print('  - sku=${item['sku']}, color=${item['color']}, size=${item['size']}');
+          }
           Toast.show(
             context,
             'Produk tidak ditemukan di order ini: ${parsedSku.sku}',
@@ -835,10 +904,10 @@ class _CheckerScreenState extends State<CheckerScreen>
         }
 
         // Check if this specific variant is already scanned
-        if (!_isSequenceUnique(parsedSku.sku, '$sequence-${itemsToAdd.length}')) {
+        if (!_isSequenceUnique(parsedSku.sku, color, size, '$sequence-${itemsToAdd.length}')) {
           Toast.show(
             context,
-            'Sequence $sequence sudah pernah di-scan untuk ${parsedSku.sku}',
+            'Sequence $sequence sudah pernah di-scan untuk ${parsedSku.sku} $color $size',
             isError: true,
           );
           return;
@@ -861,6 +930,16 @@ class _CheckerScreenState extends State<CheckerScreen>
         _scannedBarcodes.add(code);
         _scannedItems.addAll(itemsToAdd);
       });
+
+      print('DEBUG: Added items to scannedItems:');
+      for (var item in itemsToAdd) {
+        print('  - sku=${item['sku']}, color=${item['color']}, size=${item['size']}, sequence=${item['sequence']}');
+      }
+      print('DEBUG: Total scannedItems count: ${_scannedItems.length}');
+      print('DEBUG: All scannedItems:');
+      for (var item in _scannedItems) {
+        print('  - sku=${item['sku']}, color=${item['color']}, size=${item['size']}, sequence=${item['sequence']}');
+      }
 
       if (parsedSkus.length == 1) {
         Toast.show(context, '${parsedSkus.first.sku} berhasil di-scan');

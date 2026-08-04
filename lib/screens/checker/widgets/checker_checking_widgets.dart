@@ -542,17 +542,67 @@ class CheckerOrderItemsTab extends StatelessWidget {
   final List<Map<String, dynamic>> scannedItems;
 
   int _scannedQtyForKey(String sku, String color, String size) {
-    return scannedItems
+    final normalizedColor = _normalizeColor(color);
+    final count = scannedItems
         .where(
-          (item) =>
-              (item['sku']?.toString().toLowerCase() ?? '') ==
-                  sku.toLowerCase() &&
-              (item['color']?.toString().toLowerCase() ?? '') ==
-                  color.toLowerCase() &&
-              (item['size']?.toString().toLowerCase() ?? '') ==
-                  size.toLowerCase(),
+          (item) {
+            final itemSku = item['sku']?.toString().toLowerCase() ?? '';
+            final itemColor = _normalizeColor(item['color']?.toString() ?? '');
+            final itemSize = item['size']?.toString().toLowerCase() ?? '';
+            
+            final matches = itemSku == sku.toLowerCase() &&
+                itemColor == normalizedColor &&
+                itemSize == size.toLowerCase();
+            
+            if (sku.toLowerCase() == 'polospendek') {
+              print('DEBUG Widget: Checking scanned item: itemSku=$itemSku, itemColor=$itemColor (normalized from ${item['color']}), itemSize=$itemSize');
+              print('DEBUG Widget: Against: sku=${sku.toLowerCase()}, color=$normalizedColor (normalized from $color), size=${size.toLowerCase()}');
+              print('DEBUG Widget: Match result: $matches');
+            }
+            
+            return matches;
+          },
         )
         .length;
+    
+    if (sku.toLowerCase() == 'polospendek') {
+      print('DEBUG Widget: Final scannedQty for POLOSPENDEK = $count');
+    }
+    
+    return count;
+  }
+
+  /// Normalize color to handle both English and Indonesian names
+  String _normalizeColor(String color) {
+    final lowerColor = color.toLowerCase().trim();
+    
+    // Map both English and Indonesian to a common normalized form
+    const colorMap = {
+      'black': 'hitam',
+      'hitam': 'hitam',
+      'white': 'putih',
+      'putih': 'putih',
+      'red': 'merah',
+      'merah': 'merah',
+      'blue': 'biru',
+      'biru': 'biru',
+      'green': 'hijau',
+      'hijau': 'hijau',
+      'yellow': 'kuning',
+      'kuning': 'kuning',
+      'gray': 'abu-abu',
+      'grey': 'abu-abu',
+      'abu-abu': 'abu-abu',
+      'brown': 'coklat',
+      'coklat': 'coklat',
+      'orange': 'oranye',
+      'oranye': 'oranye',
+      'purple': 'ungu',
+      'ungu': 'ungu',
+      'pink': 'pink',
+    };
+    
+    return colorMap[lowerColor] ?? lowerColor;
   }
 
   List<_CheckerOrderItemSummary> _buildOrderItemSummaries() {
