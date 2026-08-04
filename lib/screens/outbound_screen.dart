@@ -1151,7 +1151,7 @@ List<ParsedSkuItem> parseSku(String skuText, {String warnaString = '', String? u
     result.add(ParsedSkuItem(
       sku: extra.trim(),
       logo: null,
-      warna: null,
+      warna: 'Hitam',
       ukuran: ukuran,
     ));
   }
