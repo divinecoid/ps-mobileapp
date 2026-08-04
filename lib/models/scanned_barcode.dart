@@ -35,12 +35,14 @@ class ScannedBarcode {
     return type == 'PIECE' || type == 'P';
   }
 
-  // Validate if barcode matches expected variant
+  // Validate if barcode matches expected variant (case-insensitive)
   bool matchesVariant(
     String expectedSku,
     String expectedColor,
     String expectedSize,
   ) {
-    return sku == expectedSku && color == expectedColor && size == expectedSize;
+    return sku.trim().toLowerCase() == expectedSku.trim().toLowerCase() &&
+        color.trim().toLowerCase() == expectedColor.trim().toLowerCase() &&
+        size.trim().toLowerCase() == expectedSize.trim().toLowerCase();
   }
 }

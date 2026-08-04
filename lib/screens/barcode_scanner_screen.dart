@@ -51,17 +51,13 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
       widget.onError!(_showToast);
     }
 
-    // Konfigurasi khusus untuk QR code (mobile-friendly)
+    // Konfigurasi untuk deteksi barcode dan QR code yang lebih handal
     controller = MobileScannerController(
       detectionSpeed: DetectionSpeed.normal,
       facing: CameraFacing.back,
       torchEnabled: false,
       autoStart: false,
-      formats: widget.scanType == ScanType.qrCode
-          ? const [
-              BarcodeFormat.qrCode, // Khusus QR code untuk mobile
-            ]
-          : const [BarcodeFormat.code128, BarcodeFormat.pdf417],
+      formats: const [BarcodeFormat.all],
     );
 
     // Start scanner setelah widget siap
