@@ -133,20 +133,25 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
 
   void _handleMenuSelection(BuildContext context, String menu) {
     if (_scannedBarcodes.isNotEmpty) {
+      _scannerController.stop();
       _showExitConfirmation(
         context,
-        () => NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'inbound'),
+        onConfirm: () => NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'inbound'),
+        onCancel: () => _scannerController.start(),
       );
     } else {
+      _scannerController.stop();
       NavigationHelper.handleMenuSelection(context, menu, currentScreen: 'inbound');
     }
   }
 
   Future<bool> _onWillPop() async {
     if (_scannedBarcodes.isEmpty) {
+      _scannerController.stop();
       return true;
     }
     
+    _scannerController.stop();
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -173,12 +178,17 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
       ),
     );
     
-    return result ?? false;
+    final shouldPop = result ?? false;
+    if (!shouldPop) {
+      _scannerController.start();
+    }
+    return shouldPop;
   }
 
-  void _showExitConfirmation(BuildContext context, VoidCallback onConfirm) {
+  void _showExitConfirmation(BuildContext context, {required VoidCallback onConfirm, required VoidCallback onCancel}) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: Row(
           children: [
@@ -192,7 +202,10 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              Navigator.pop(context);
+              onCancel();
+            },
             child: Text('Batal'),
           ),
           TextButton(
