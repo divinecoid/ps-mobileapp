@@ -159,14 +159,54 @@ class _OutboundScreenState extends State<OutboundScreen> {
       if (response['success'] == true) {
         final items = response['data']['items'] as List;
 
-        // Group items by SKU-Color-Size
-        final Map<String, GroupedProductItem> groupedMap = {};
-
+        final List<Map<String, dynamic>> expandedItems = [];
         for (var item in items) {
-          // Normalize values - handle null and empty strings
+          final id = (item['id'] ?? '').toString();
           final sku = (item['sku'] ?? '').toString().trim();
           final color = (item['color'] ?? '').toString().trim();
           final size = (item['size'] ?? '').toString().trim();
+          final itemName = (item['item_name'] ?? '').toString().trim();
+          final itemIndex = item['item_index'] ?? 1;
+
+          final parsed = parseSku(sku, warnaString: color, ukuran: size);
+          if (parsed.isEmpty) {
+            expandedItems.add({
+              'id': id,
+              'sku': sku,
+              'color': color,
+              'size': size,
+              'item_name': itemName,
+              'item_index': itemIndex,
+            });
+          } else {
+            for (var p in parsed) {
+              final displayParts = [
+                p.sku,
+                if (p.logo != null) '(${p.logo})',
+                p.warna,
+                p.ukuran,
+              ].where((s) => s != null && s!.isNotEmpty).toList();
+
+              expandedItems.add({
+                'id': id,
+                'sku': p.sku,
+                'color': p.warna ?? '',
+                'size': p.ukuran ?? '',
+                'item_name': displayParts.join(' '),
+                'item_index': itemIndex,
+              });
+            }
+          }
+        }
+
+        // Group items by SKU-Color-Size
+        final Map<String, GroupedProductItem> groupedMap = {};
+
+        for (var item in expandedItems) {
+          final sku = item['sku'] as String;
+          final color = item['color'] as String;
+          final size = item['size'] as String;
+          final id = item['id'] as String;
 
           // Create unique key for grouping
           final key = '$sku|$color|$size';
@@ -183,7 +223,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
             final existing = groupedMap[key]!;
             groupedMap[key] = existing.copyWith(
               requiredQuantity: existing.requiredQuantity + 1,
-              orderItemIds: [...existing.orderItemIds, (item['id'] ?? '').toString()],
+              orderItemIds: [...existing.orderItemIds, id],
             );
           } else {
             // Create new group
@@ -196,7 +236,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   : 'Unknown Item',
               requiredQuantity: 1,
               scannedBarcodes: [],
-              orderItemIds: [(item['id'] ?? '').toString()],
+              orderItemIds: [id],
               isComplete: false,
             );
           }
@@ -204,7 +244,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
         setState(() {
           _groupedProducts = groupedMap.values.toList();
-          _products = items
+          _products = expandedItems
               .map(
                 (item) => Product(
                   sku: item['sku'] ?? '',
@@ -1062,4 +1102,59 @@ class _OutboundScreenState extends State<OutboundScreen> {
       ),
     );
   }
+}
+
+class ParsedSkuItem {
+  final String sku;
+  final String? logo;
+  final String? warna;
+  final String? ukuran;
+
+  ParsedSkuItem({
+    required this.sku,
+    this.logo,
+    this.warna,
+    this.ukuran,
+  });
+}
+
+List<ParsedSkuItem> parseSku(String skuText, {String warnaString = '', String? ukuran}) {
+  final regex = RegExp(r'^(?:(PAKET(\d+))-)?(?:(.+?)\*)?([^+]+)(?:\+(.+))?$');
+  final match = regex.firstMatch(skuText);
+
+  if (match == null) return [];
+
+  final jumlahStr = match.group(2);
+  final jumlah = jumlahStr != null ? int.tryParse(jumlahStr) ?? 1 : 1;
+  final logo = match.group(3);
+  final skuUtama = match.group(4) ?? '';
+  final extra = match.group(5);
+
+  final RegExp colorSplitRegExp = RegExp(r'[|=]');
+  final List<String> warnaList = warnaString.isNotEmpty ? warnaString.split(colorSplitRegExp) : [];
+  final List<ParsedSkuItem> result = [];
+
+  for (int i = 0; i < jumlah; i++) {
+    String warna = 'Hitam';
+    if (i < warnaList.length && warnaList[i].trim().isNotEmpty) {
+      warna = warnaList[i].trim();
+    }
+    result.add(ParsedSkuItem(
+      sku: skuUtama.trim(),
+      logo: logo?.trim(),
+      warna: warna,
+      ukuran: ukuran,
+    ));
+  }
+
+  if (extra != null && extra.trim().isNotEmpty) {
+    result.add(ParsedSkuItem(
+      sku: extra.trim(),
+      logo: null,
+      warna: null,
+      ukuran: ukuran,
+    ));
+  }
+
+  return result;
 }
