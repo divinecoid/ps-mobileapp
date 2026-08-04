@@ -82,22 +82,22 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // 1. Ambient Background Gradient
+          // 1. Ambient Background Gradient (Bright & Clean)
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
                 colors: [
-                  Color(0xFF0F172A), // Deep Slate Dark Blue
-                  Color(0xFF1E1E38), // Deep Indigo
-                  Color(0xFF0B0F19), // Midnight Black-Blue
+                  Color(0xFFF8FAFC), // Slate 50
+                  Color(0xFFF1F5F9), // Slate 100
+                  Color(0xFFE2E8F0), // Slate 200
                 ],
               ),
             ),
           ),
 
-          // 2. Decorative Glowing Spheres
+          // 2. Decorative Glowing Spheres (Soft & Bright)
           // Top Left Sphere
           Positioned(
             top: -screenSize.height * 0.1,
@@ -109,7 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    Color(0x333B82F6), // Blue Glow
+                    Color(0x1F3B82F6), // Very light Blue Glow
                     Color(0x003B82F6),
                   ],
                 ),
@@ -128,7 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    Color(0x228B5CF6), // Purple Glow
+                    Color(0x1F8B5CF6), // Very light Purple Glow
                     Color(0x008B5CF6),
                   ],
                 ),
@@ -147,7 +147,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    Color(0x2206B6D4), // Cyan/Teal Glow
+                    Color(0x1F06B6D4), // Very light Cyan Glow
                     Color(0x0006B6D4),
                   ],
                 ),
@@ -187,19 +187,19 @@ class _LoginScreenState extends State<LoginScreen> {
                             shape: BoxShape.circle,
                             gradient: LinearGradient(
                               colors: [
-                                Colors.blue.shade400.withOpacity(0.2),
-                                Colors.indigo.shade500.withOpacity(0.05),
+                                Colors.blue.shade100,
+                                Colors.blue.shade50.withOpacity(0.5),
                               ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
                             border: Border.all(
-                              color: Colors.blue.shade300.withOpacity(0.3),
+                              color: Colors.blue.shade200,
                               width: 1.5,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.blue.shade500.withOpacity(0.15),
+                                color: Colors.blue.shade200.withOpacity(0.2),
                                 blurRadius: 20,
                                 spreadRadius: 1,
                               )
@@ -219,7 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       gradient: LinearGradient(
-                                        colors: [Colors.blue.shade400, Colors.indigo.shade600],
+                                        colors: [Colors.blue.shade500, Colors.indigo.shade600],
                                       ),
                                     ),
                                     padding: EdgeInsets.all(12),
@@ -246,10 +246,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           fontSize: 28,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 6,
-                          color: Colors.white,
+                          color: Color(0xFF1E293B), // Dark Slate
                           shadows: [
                             Shadow(
-                              color: Colors.blue.shade300.withOpacity(0.3),
+                              color: Colors.blue.shade200.withOpacity(0.3),
                               offset: Offset(0, 2),
                               blurRadius: 4,
                             )
@@ -264,198 +264,194 @@ class _LoginScreenState extends State<LoginScreen> {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.white.withOpacity(0.5),
-                          fontWeight: FontWeight.w300,
+                          color: Color(0xFF64748B), // Slate 500
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
 
                       SizedBox(height: 36),
 
-                      // Glassmorphism Card
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                          child: Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.06),
-                              borderRadius: BorderRadius.circular(24),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.12),
-                                width: 1.5,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
-                                  blurRadius: 24,
-                                  offset: Offset(0, 8),
-                                ),
-                              ],
+                      // Clean Light Card
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: Color(0xFFE2E8F0), // Slate 200
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 24,
+                              offset: Offset(0, 8),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                // Sleek Error Message Box
-                                if (_errorMessage != null) ...[
-                                  Container(
-                                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                    margin: EdgeInsets.only(bottom: 20),
-                                    decoration: BoxDecoration(
-                                      color: Colors.redAccent.withOpacity(0.12),
-                                      borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(
-                                        color: Colors.redAccent.withOpacity(0.35),
-                                        width: 1,
-                                      ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Sleek Error Message Box
+                              if (_errorMessage != null) ...[
+                                Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  margin: EdgeInsets.only(bottom: 20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: Colors.red.shade200,
+                                      width: 1,
                                     ),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.error_outline_rounded,
-                                          color: Colors.redAccent.shade100,
-                                          size: 20,
-                                        ),
-                                        SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            _errorMessage!,
-                                            style: TextStyle(
-                                              color: Colors.redAccent.shade100,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w500,
-                                            ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.error_outline_rounded,
+                                        color: Colors.red.shade700,
+                                        size: 20,
+                                      ),
+                                      SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          _errorMessage!,
+                                          style: TextStyle(
+                                            color: Colors.red.shade700,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-
-                                // Username Input Field
-                                _buildTextField(
-                                  controller: _usernameController,
-                                  focusNode: _usernameFocusNode,
-                                  labelText: "Username",
-                                  hintText: "Enter your username",
-                                  prefixIcon: Icons.person_outline_rounded,
-                                ),
-
-                                SizedBox(height: 20),
-
-                                // Password Input Field
-                                _buildTextField(
-                                  controller: _passwordController,
-                                  focusNode: _passwordFocusNode,
-                                  labelText: "Password",
-                                  hintText: "Enter your password",
-                                  prefixIcon: Icons.lock_outline_rounded,
-                                  obscureText: _obscurePassword,
-                                  suffixIcon: IconButton(
-                                    icon: Icon(
-                                      _obscurePassword
-                                          ? Icons.visibility_off_outlined
-                                          : Icons.visibility_outlined,
-                                      color: _passwordFocusNode.hasFocus
-                                          ? Colors.blue.shade300
-                                          : Colors.white.withOpacity(0.4),
-                                      size: 20,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _obscurePassword = !_obscurePassword;
-                                      });
-                                    },
-                                  ),
-                                ),
-
-                                SizedBox(height: 12),
-
-                                // Sleek Forgot Password placeholder
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton(
-                                    onPressed: () {
-                                      // Optional placeholder feedback
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text("Please contact system administrator to reset password."),
-                                          backgroundColor: Colors.indigo.shade800,
-                                        ),
-                                      );
-                                    },
-                                    style: TextButton.styleFrom(
-                                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                    child: Text(
-                                      "Forgot Password?",
-                                      style: TextStyle(
-                                        color: Colors.blue.shade300,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
                                       ),
-                                    ),
-                                  ),
-                                ),
-
-                                SizedBox(height: 28),
-
-                                // Elegant Morphing Gradient Login Button
-                                Container(
-                                  height: 52,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16),
-                                    gradient: LinearGradient(
-                                      colors: _loading
-                                          ? [Colors.blue.shade600.withOpacity(0.7), Colors.indigo.shade700.withOpacity(0.7)]
-                                          : [Colors.blue.shade500, Colors.indigo.shade600],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                    boxShadow: _loading
-                                        ? []
-                                        : [
-                                            BoxShadow(
-                                              color: Colors.blue.shade500.withOpacity(0.35),
-                                              blurRadius: 16,
-                                              offset: Offset(0, 6),
-                                            ),
-                                          ],
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                                                   child: InkWell(
-                                      onTap: _loading ? null : _handleLogin,
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Center(
-                                        child: _loading
-                                            ? SizedBox(
-                                                height: 22,
-                                                width: 22,
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2.5,
-                                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                                    Colors.white,
-                                                  ),
-                                                ),
-                                              )
-                                            : Text(
-                                                "LOG IN",
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.bold,
-                                                  letterSpacing: 1.5,
-                                                ),
-                                              ),
-                                      ),
-                                    ),
+                                    ],
                                   ),
                                 ),
                               ],
-                            ),
+
+                              // Username Input Field
+                              _buildTextField(
+                                controller: _usernameController,
+                                focusNode: _usernameFocusNode,
+                                labelText: "Username",
+                                hintText: "Enter your username",
+                                prefixIcon: Icons.person_outline_rounded,
+                              ),
+
+                              SizedBox(height: 20),
+
+                              // Password Input Field
+                              _buildTextField(
+                                controller: _passwordController,
+                                focusNode: _passwordFocusNode,
+                                labelText: "Password",
+                                hintText: "Enter your password",
+                                prefixIcon: Icons.lock_outline_rounded,
+                                obscureText: _obscurePassword,
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                    color: _passwordFocusNode.hasFocus
+                                        ? Colors.blue.shade600
+                                        : Color(0xFF94A3B8),
+                                    size: 20,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscurePassword = !_obscurePassword;
+                                    });
+                                  },
+                                ),
+                              ),
+
+                              SizedBox(height: 12),
+
+                              // Sleek Forgot Password placeholder
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () {
+                                    // Optional placeholder feedback
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text("Please contact system administrator to reset password."),
+                                        backgroundColor: Colors.indigo.shade800,
+                                      ),
+                                    );
+                                  },
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: Text(
+                                    "Forgot Password?",
+                                    style: TextStyle(
+                                      color: Colors.blue.shade600,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              SizedBox(height: 28),
+
+                              // Elegant Morphing Gradient Login Button
+                              Container(
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  gradient: LinearGradient(
+                                    colors: _loading
+                                        ? [Colors.blue.shade600.withOpacity(0.7), Colors.indigo.shade700.withOpacity(0.7)]
+                                        : [Colors.blue.shade600, Colors.indigo.shade700],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  boxShadow: _loading
+                                      ? []
+                                      : [
+                                          BoxShadow(
+                                            color: Colors.blue.shade500.withOpacity(0.3),
+                                            blurRadius: 16,
+                                            offset: Offset(0, 6),
+                                          ),
+                                        ],
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: _loading ? null : _handleLogin,
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Center(
+                                      child: _loading
+                                          ? SizedBox(
+                                              height: 22,
+                                              width: 22,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.5,
+                                                valueColor: AlwaysStoppedAnimation<Color>(
+                                                  Colors.white,
+                                                ),
+                                              ),
+                                            )
+                                          : Text(
+                                              "LOG IN",
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.bold,
+                                                letterSpacing: 1.5,
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -468,9 +464,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.white.withOpacity(0.3),
+                          color: Color(0xFF94A3B8), // Slate 400
                           letterSpacing: 1.5,
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -484,7 +480,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Beautiful Reusable Glassmorphism TextField Builder
+  // Beautiful Reusable TextField Builder
   Widget _buildTextField({
     required TextEditingController controller,
     required FocusNode focusNode,
@@ -505,7 +501,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Text(
             labelText,
             style: TextStyle(
-              color: isFocused ? Colors.blue.shade300 : Colors.white.withOpacity(0.6),
+              color: isFocused ? Colors.blue.shade600 : Color(0xFF64748B), // Slate 500
               fontSize: 12,
               fontWeight: isFocused ? FontWeight.w600 : FontWeight.w500,
             ),
@@ -517,17 +513,17 @@ class _LoginScreenState extends State<LoginScreen> {
           duration: Duration(milliseconds: 250),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            color: Colors.white.withOpacity(isFocused ? 0.09 : 0.04),
+            color: isFocused ? Colors.white : Color(0xFFF8FAFC), // Slate 50
             border: Border.all(
               color: isFocused 
-                  ? Colors.blue.shade400.withOpacity(0.8) 
-                  : Colors.white.withOpacity(0.08),
+                  ? Colors.blue.shade500 
+                  : Color(0xFFE2E8F0), // Slate 200
               width: isFocused ? 1.8 : 1.0,
             ),
             boxShadow: isFocused
                 ? [
                     BoxShadow(
-                      color: Colors.blue.shade400.withOpacity(0.12),
+                      color: Colors.blue.shade500.withOpacity(0.08),
                       blurRadius: 10,
                       spreadRadius: 1,
                     )
@@ -539,19 +535,19 @@ class _LoginScreenState extends State<LoginScreen> {
             focusNode: focusNode,
             obscureText: obscureText,
             style: TextStyle(
-              color: Colors.white,
+              color: Color(0xFF1E293B), // Slate 800
               fontSize: 15,
             ),
-            cursorColor: Colors.blue.shade300,
+            cursorColor: Colors.blue.shade600,
             decoration: InputDecoration(
               hintText: hintText,
               hintStyle: TextStyle(
-                color: Colors.white.withOpacity(0.3),
+                color: Color(0xFF94A3B8), // Slate 400
                 fontSize: 14,
               ),
               prefixIcon: Icon(
                 prefixIcon,
-                color: isFocused ? Colors.blue.shade300 : Colors.white.withOpacity(0.4),
+                color: isFocused ? Colors.blue.shade600 : Color(0xFF94A3B8), // Slate 400
                 size: 22,
               ),
               suffixIcon: suffixIcon,
