@@ -6,6 +6,7 @@ import '../models/product.dart';
 import '../models/grouped_product_item.dart';
 import '../api/outbound_service.dart';
 import '../api/order_service.dart';
+import '../api/notification_service.dart';
 import '../utils/navigation_helper.dart';
 import 'scan_product_group_screen.dart';
 import 'outbound_list_screen.dart';
@@ -573,6 +574,109 @@ class _OutboundScreenState extends State<OutboundScreen> {
     );
   }
 
+  void _confirmDeleteGroup(int index) {
+    final group = _groupedProducts[index];
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.delete, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Hapus Produk?',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Apakah Anda yakin ingin menghapus grup produk "${group.displayName}" dari daftar outbound ini?',
+          style: const TextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Batal',
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _deleteGroup(index);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Ya, Hapus',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteGroup(int index) async {
+    final group = _groupedProducts[index];
+    final resiText = _scannedResiNumber ?? _orderData?['order_sn'] ?? '-';
+
+    setState(() {
+      _groupedProducts.removeAt(index);
+      _products.removeWhere((p) =>
+          p.sku.toLowerCase() == group.sku.toLowerCase() &&
+          (group.color.isEmpty || p.nama.toLowerCase().contains(group.color.toLowerCase())) &&
+          (group.size.isEmpty || p.nama.toLowerCase().contains(group.size.toLowerCase()))
+      );
+    });
+
+    try {
+      await NotificationService.createNotification(
+        title: 'Outbound: Hapus Produk',
+        message: 'Grup produk "${group.displayName}" dihapus dari outbound resi $resiText',
+        type: 'outbound_delete',
+        data: {
+          'order_id': _orderData?['id'],
+          'awb_code': _scannedResiNumber,
+          'sku': group.sku,
+          'color': group.color,
+          'size': group.size,
+        },
+      );
+    } catch (e) {
+      print('Gagal membuat notifikasi: $e');
+    }
+
+    if (mounted) {
+      Toast.show(context, 'Grup produk "${group.displayName}" berhasil dihapus');
+    }
+  }
+
   @override
   void dispose() {
     super.dispose();
@@ -1094,6 +1198,12 @@ class _OutboundScreenState extends State<OutboundScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
+                ),
+                SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: Colors.red.shade600),
+                  onPressed: () => _confirmDeleteGroup(index),
+                  tooltip: 'Hapus Produk',
                 ),
               ],
             ),

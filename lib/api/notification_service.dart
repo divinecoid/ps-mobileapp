@@ -35,4 +35,27 @@ class NotificationService {
       rethrow;
     }
   }
+
+  static Future<Map<String, dynamic>> createNotification({
+    required String title,
+    required String message,
+    required String type,
+    Map<String, dynamic>? data,
+  }) async {
+    try {
+      final resp = await ApiClient.dio.post(
+        Endpoint.notification,
+        data: {
+          'title': title,
+          'message': message,
+          'type': type,
+          'data': data,
+        },
+      );
+      return Map<String, dynamic>.from(resp.data);
+    } on DioException catch (e) {
+      if (e.response != null) return Map<String, dynamic>.from(e.response!.data);
+      rethrow;
+    }
+  }
 }
