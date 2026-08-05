@@ -391,7 +391,11 @@ class _MutationScreenState extends State<MutationScreen> {
               flex: 2,
               child: Stack(
                 children: [
-                  MobileScanner(controller: _scannerController, onDetect: _onDetect),
+                  MobileScanner(
+                    fit: BoxFit.cover,
+                    controller: _scannerController,
+                    onDetect: _onDetect,
+                  ),
                   Center(
                     child: Container(
                       width: 250, height: 250,

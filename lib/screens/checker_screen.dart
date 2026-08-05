@@ -542,6 +542,7 @@ class _CheckerScreenState extends State<CheckerScreen>
                       ColoredBox(
                         color: Colors.black,
                         child: MobileScanner(
+                          fit: BoxFit.cover,
                           controller: scannerController,
                           onDetect: handleDetect,
                         ),

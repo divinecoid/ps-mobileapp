@@ -395,6 +395,7 @@ class _CheckerScanTabState extends State<CheckerScanTab> {
             ColoredBox(
               color: Colors.black,
               child: MobileScanner(
+                fit: BoxFit.cover,
                 controller: widget.controller,
                 onDetect: widget.onDetect,
                 scanWindow: scanWindow,

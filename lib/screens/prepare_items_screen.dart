@@ -243,6 +243,7 @@ class _PrepareItemsScreenState extends State<PrepareItemsScreen>
       children: [
         // Camera Scanner
         MobileScanner(
+          fit: BoxFit.cover,
           controller: _scannerController,
           onDetect: _handleBarcodeDetect,
         ),

@@ -1469,6 +1469,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
               children: [
                 // QR Scanner
                 MobileScanner(
+                  fit: BoxFit.cover,
                   controller: _scannerController,
                   onDetect: _onDetect,
                 ),
