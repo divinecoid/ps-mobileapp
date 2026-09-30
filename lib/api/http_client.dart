@@ -11,7 +11,7 @@ class ApiClient {
   static String get _baseUrl {
     final apiUrl = dotenv.env['API_URL'];
     if (apiUrl != null && apiUrl.isNotEmpty) {
-      return apiUrl;
+      return apiUrl.endsWith('/api') ? apiUrl : (apiUrl.endsWith('/') ? '${apiUrl}api' : '$apiUrl/api');
     }
     final baseAppUrl = dotenv.env['VITE_APP_BASE_URL'];
     if (baseAppUrl != null && baseAppUrl.isNotEmpty) {
