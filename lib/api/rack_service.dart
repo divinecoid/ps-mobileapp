@@ -54,7 +54,79 @@ class Rack {
   int get hashCode => id.hashCode;
 }
 
+/// Satu baris stok di rak (model + warna + ukuran)
+class RackStockItem {
+  final String model;
+  final String color;
+  final String size;
+  final int quantity;
+
+  RackStockItem({
+    required this.model,
+    required this.color,
+    required this.size,
+    required this.quantity,
+  });
+
+  factory RackStockItem.fromJson(Map<String, dynamic> json) {
+    return RackStockItem(
+      model: json['model'] as String? ?? '-',
+      color: json['color'] as String? ?? '-',
+      size: json['size'] as String? ?? '-',
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// Hasil cek stok untuk satu rak
+class RackStock {
+  final String code;
+  final String name;
+  final String? warehouse;
+  final List<RackStockItem> items;
+  final int total;
+
+  RackStock({
+    required this.code,
+    required this.name,
+    this.warehouse,
+    required this.items,
+    required this.total,
+  });
+
+  factory RackStock.fromJson(Map<String, dynamic> json) {
+    final rack = json['rack'] as Map<String, dynamic>;
+    return RackStock(
+      code: rack['code'] as String,
+      name: rack['name'] as String,
+      warehouse: rack['warehouse'] as String?,
+      items: (json['items'] as List<dynamic>? ?? [])
+          .map((e) => RackStockItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      total: (json['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 class RackService {
+  /// Ambil stok rak berdasarkan kode rak (hasil scan QR).
+  /// Melempar [String] berisi pesan error yang siap ditampilkan.
+  static Future<RackStock> getStockByCode(String code) async {
+    try {
+      final response = await ApiClient.dio.get(
+        '/rack-stock',
+        queryParameters: {'code': code},
+      );
+      if (response.data['success'] == true) {
+        return RackStock.fromJson(response.data['data'] as Map<String, dynamic>);
+      }
+      throw response.data['message']?.toString() ?? 'Gagal memuat stok';
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) throw 'Rak tidak ditemukan';
+      throw 'Gagal memuat stok rak. Periksa koneksi Anda.';
+    }
+  }
+
   /// Get all racks from the master data
   /// 
   /// Returns:

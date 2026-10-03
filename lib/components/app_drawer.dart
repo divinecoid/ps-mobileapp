@@ -176,6 +176,15 @@ class _AppDrawerState extends State<AppDrawer> {
 
                 SizedBox(height: 8),
 
+                // Cek Stok
+                _buildMenuCard(
+                  icon: Icons.manage_search,
+                  title: 'Cek Stok',
+                  onTap: () => _handleMenuTap('stock_check'),
+                ),
+
+                SizedBox(height: 8),
+
                 // Stock Opname
                 _buildMenuCard(
                   icon: Icons.inventory_2,

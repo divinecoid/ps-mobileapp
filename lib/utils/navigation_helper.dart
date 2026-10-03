@@ -9,6 +9,7 @@ import '../screens/reject_screen.dart';
 import '../screens/mutation_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/bluetooth_pairing_screen.dart';
+import '../screens/stock_check_screen.dart';
 import '../state/auth_provider.dart';
 import 'package:provider/provider.dart';
 import '../components/toast.dart';
@@ -96,6 +97,15 @@ class NavigationHelper {
 
       case 'daily_statistics':
         // TODO: Navigate to daily statistics screen
+        return true;
+
+      case 'stock_check':
+        if (currentScreen != 'stock_check') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const StockCheckScreen()),
+          );
+        }
         return true;
 
       case 'stock_opname':
