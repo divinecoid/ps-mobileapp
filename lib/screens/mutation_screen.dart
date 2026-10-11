@@ -177,6 +177,14 @@ class _MutationScreenState extends State<MutationScreen> {
     
     // Step 1: Handle Rack Scanning if no active rack
     if (_activeRack == null) {
+      // The rack list failed to load (e.g. no access / network) — say so
+      // instead of calling every QR "not a valid rack", and retry the load.
+      if (_racks.isEmpty && !_isLoadingRacks) {
+        SoundService().playError();
+        Toast.show(context, '⚠️ Daftar rak gagal dimuat. Mencoba lagi... Jika terus gagal, hubungi admin (akses data rak).');
+        _loadRacks();
+        return;
+      }
       final rack = _racks.firstWhere(
         (r) => r.code.toLowerCase() == cleanedBarcode.toLowerCase() || r.id == cleanedBarcode,
         orElse: () => Rack(id: '', code: '', name: '', warehouseId: ''),

@@ -26,7 +26,8 @@ class Rack {
       name: json['name'] as String,
       warehouseId: json['warehouse_id'] as String,
       warehouseName: json['warehouse']?['name'] as String?,
-      isDeleted: json['is_deleted'] as bool? ?? false,
+      // The API flags soft-deleted (nonaktif) racks as `deleted_at: true`.
+      isDeleted: (json['deleted_at'] ?? json['is_deleted']) as bool? ?? false,
     );
   }
 
@@ -133,7 +134,12 @@ class RackService {
   /// - List of Rack objects
   static Future<List<Rack>> getRacks() async {
     try {
-      final response = await ApiClient.dio.get('/rack/master');
+      // The API paginates (default 100 per page); ask for everything so racks
+      // beyond the first page can still be scanned.
+      final response = await ApiClient.dio.get(
+        '/rack/master',
+        queryParameters: {'per_page': 1000},
+      );
 
       if (response.data['success'] == true) {
         final List<dynamic> data = response.data['data'] ?? [];
