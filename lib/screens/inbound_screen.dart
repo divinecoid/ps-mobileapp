@@ -4,6 +4,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../components/app_drawer.dart';
 import '../utils/navigation_helper.dart';
 import '../models/barcode_product.dart' as bp;
+import '../models/manual_receive_item.dart';
+import 'inbound_manual_sheet.dart';
 import '../components/toast.dart';
 import '../utils/sound_service.dart';
 import '../api/inbound_service.dart';
@@ -32,6 +34,8 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
   bool _isProcessingScan = false;
   List<bp.BarcodeProduct> _scannedBarcodes = [];
   List<bp.BarcodeProduct> _generatedBarcodes = [];
+  // Goods received without a QR code (returned unsewn / extra sewn), by quantity.
+  final List<ManualReceiveItem> _manualItems = [];
   bool _isListExpanded = true;
   bool _isSubmitting = false;
   bool _isLoadingWarehouses = true;
@@ -131,8 +135,10 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
     super.dispose();
   }
 
+  bool get _hasPendingItems => _scannedBarcodes.isNotEmpty || _manualItems.isNotEmpty;
+
   void _handleMenuSelection(BuildContext context, String menu) {
-    if (_scannedBarcodes.isNotEmpty) {
+    if (_hasPendingItems) {
       _scannerController.stop();
       _showExitConfirmation(
         context,
@@ -146,7 +152,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
   }
 
   Future<bool> _onWillPop() async {
-    if (_scannedBarcodes.isEmpty) {
+    if (!_hasPendingItems) {
       _scannerController.stop();
       return true;
     }
@@ -163,7 +169,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
           ],
         ),
         content: Text(
-          'Anda memiliki ${_scannedBarcodes.length} barcode yang belum di-submit.\n\nJika Anda keluar sekarang, semua data scan akan hilang.\n\nApakah Anda yakin ingin keluar?',
+          'Anda memiliki ${_scannedBarcodes.length + _manualItems.length} data yang belum di-submit.\n\nJika Anda keluar sekarang, semua data scan akan hilang.\n\nApakah Anda yakin ingin keluar?',
         ),
         actions: [
           TextButton(
@@ -1049,9 +1055,62 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
     );
   }
 
+  Future<void> _addManualItem() async {
+    _scannerController.stop();
+    final item = await showInboundManualSheet(
+      context,
+      queuedReturned: (lineId) => _manualItems
+          .where((m) => m.line.id == lineId && m.category != ManualCategory.extra)
+          .fold(0, (sum, m) => sum + m.qty),
+    );
+    if (!mounted) return;
+    _scannerController.start();
+    if (item != null) {
+      setState(() => _manualItems.add(item));
+      Toast.show(context, 'Ditambahkan: ${item.category.label} (${item.qty})');
+    }
+  }
+
+  Widget _buildManualSection() {
+    return Container(
+      width: double.infinity,
+      color: Colors.amber.shade50,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Tanpa QR (${_manualItems.length})',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 150),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _manualItems.length,
+              itemBuilder: (context, index) {
+                final m = _manualItems[index];
+                return ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(m.line.label),
+                  subtitle: Text('${m.category.label} · ${m.qty} pcs'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () => setState(() => _manualItems.removeAt(index)),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submitInbound() async {
-    if (_scannedBarcodes.isEmpty) {
-      Toast.show(context, 'Belum ada barcode yang di-scan');
+    if (_scannedBarcodes.isEmpty && _manualItems.isEmpty) {
+      Toast.show(context, 'Belum ada barcode yang di-scan atau barang tanpa QR');
       return;
     }
 
@@ -1099,6 +1158,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
         barcodesDozens: dozenBarcodes.isNotEmpty ? dozenBarcodes : null,
         barcodesPieces: pieceBarcodes.isNotEmpty ? pieceBarcodes : null,
         barcodesRejected: rejectedBarcodes.isNotEmpty ? rejectedBarcodes : null,
+        manualItems: _manualItems.isNotEmpty ? _manualItems.map((m) => m.toJson()).toList() : null,
         warehouseId: dozenBarcodes.isNotEmpty ? _selectedWarehouseId : null,
         notes: _notesController.text.trim(),
       );
@@ -1273,6 +1333,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                     Navigator.pop(context);
                     setState(() {
                       _scannedBarcodes.clear();
+                      _manualItems.clear();
                       _notesController.clear();
                     });
                   },
@@ -1385,7 +1446,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: _scannedBarcodes.isEmpty,
+      canPop: !_hasPendingItems,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         final shouldPop = await _onWillPop();
@@ -1423,6 +1484,11 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
               );
             },
             tooltip: 'Daftar Penerimaan',
+          ),
+          IconButton(
+            icon: Icon(Icons.edit_note, color: Colors.white),
+            onPressed: _addManualItem,
+            tooltip: 'Terima tanpa QR',
           ),
           if (_scannedBarcodes.isNotEmpty)
             IconButton(
@@ -1612,6 +1678,10 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                     ),
                   ),
                   
+                  // Items received without a QR code (not shown on the "Lebihan" tab)
+                  if (_manualItems.isNotEmpty && _tabController.index != 2)
+                    _buildManualSection(),
+
                   // Scanned Items List
                   if (_isListExpanded)
                     Expanded(

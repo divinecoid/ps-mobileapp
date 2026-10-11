@@ -57,6 +57,7 @@ class InboundService {
     List<String>? barcodesDozens,
     List<Map<String, dynamic>>? barcodesPieces,
     List<String>? barcodesRejected,
+    List<Map<String, dynamic>>? manualItems,
     String? warehouseId,
     String? notes,
   }) async {
@@ -64,11 +65,12 @@ class InboundService {
     final hasDozen = barcodesDozens != null && barcodesDozens.isNotEmpty;
     final hasPiece = barcodesPieces != null && barcodesPieces.isNotEmpty;
     final hasRejected = barcodesRejected != null && barcodesRejected.isNotEmpty;
+    final hasManual = manualItems != null && manualItems.isNotEmpty;
     
-    if (!hasDozen && !hasPiece && !hasRejected) {
+    if (!hasDozen && !hasPiece && !hasRejected && !hasManual) {
       return {
         'success': false,
-        'message': 'Minimal salah satu dari barcodes_dozen, barcodes_piece, atau barcodes_rejected harus diisi',
+        'message': 'Minimal salah satu dari barcodes_dozen, barcodes_piece, barcodes_rejected, atau barang tanpa QR harus diisi',
         'data': null,
         'errors': [],
       };
@@ -98,6 +100,10 @@ class InboundService {
       
       if (hasRejected) {
         requestData['barcodes_rejected'] = barcodesRejected;
+      }
+
+      if (hasManual) {
+        requestData['manual_items'] = manualItems;
       }
       
       // Always send notes, even if empty (backend might expect it)
@@ -260,6 +266,40 @@ class InboundService {
         return {
           'success': false,
           'message': responseData['message'] ?? 'Gagal generate barcode',
+        };
+      }
+      return {
+        'success': false,
+        'message': 'Network error: ${e.message}',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Unexpected error: $e',
+      };
+    }
+  }
+
+  /// Open request lines to pick from when receiving goods without a QR code.
+  static Future<Map<String, dynamic>> getRequestLines({String? search}) async {
+    try {
+      final response = await ApiClient.dio.get(
+        '/inbound/request-details',
+        queryParameters: {
+          'per_page': 30,
+          if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+        },
+      );
+
+      return {
+        'success': true,
+        'data': response.data['data'],
+      };
+    } on DioException catch (e) {
+      if (e.response != null) {
+        return {
+          'success': false,
+          'message': e.response!.data['message'] ?? 'Gagal memuat baris permintaan',
         };
       }
       return {
