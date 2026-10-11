@@ -134,12 +134,10 @@ class RackService {
   /// - List of Rack objects
   static Future<List<Rack>> getRacks() async {
     try {
-      // The API paginates (default 100 per page); ask for everything so racks
-      // beyond the first page can still be scanned.
-      final response = await ApiClient.dio.get(
-        '/rack/master',
-        queryParameters: {'per_page': 1000},
-      );
+      // /rack/options is open to any logged-in user (warehouse staff aren't
+      // admins, so the admin-only /rack/master answered 403) and returns every
+      // active rack unpaginated, so any scanned rack can be matched.
+      final response = await ApiClient.dio.get('/rack/options');
 
       if (response.data['success'] == true) {
         final List<dynamic> data = response.data['data'] ?? [];
