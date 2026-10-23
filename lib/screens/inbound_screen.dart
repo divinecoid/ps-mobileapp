@@ -765,7 +765,13 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
 
       final rack = await RackService.getRackByCode(code);
 
-      if (rack != null) {
+      if (rack != null && rack.sizeCode != null && rack.sizeCode != sizeCode) {
+        // Rak gudang kecil per ukuran: barang harus masuk ke rak dengan ukuran sama
+        setDialogState(() {
+          _isValidating = false;
+          _rackError = 'Ukuran rak (${rack.sizeCode}) tidak sesuai dengan ukuran barang ($sizeCode)';
+        });
+      } else if (rack != null) {
         setDialogState(() {
           _validatedRackId = rack.id;
           _validatedRackName = rack.name;

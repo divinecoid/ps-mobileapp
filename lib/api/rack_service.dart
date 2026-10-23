@@ -10,6 +10,9 @@ class Rack {
   final String? warehouseName;
   final bool isDeleted;
 
+  /// Kode ukuran rak (hanya terisi untuk rak gudang kecil per ukuran).
+  final String? sizeCode;
+
   Rack({
     required this.id,
     required this.code,
@@ -17,6 +20,7 @@ class Rack {
     required this.warehouseId,
     this.warehouseName,
     this.isDeleted = false,
+    this.sizeCode,
   });
 
   factory Rack.fromJson(Map<String, dynamic> json) {
@@ -28,6 +32,7 @@ class Rack {
       warehouseName: json['warehouse']?['name'] as String?,
       // The API flags soft-deleted (nonaktif) racks as `deleted_at: true`.
       isDeleted: (json['deleted_at'] ?? json['is_deleted']) as bool? ?? false,
+      sizeCode: json['size']?['code'] as String?,
     );
   }
 
