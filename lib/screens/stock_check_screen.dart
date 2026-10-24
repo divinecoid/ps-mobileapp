@@ -138,6 +138,14 @@ class _StockCheckScreenState extends State<StockCheckScreen> {
                         stock.warehouse!,
                         style: TextStyle(color: Colors.grey[700]),
                       ),
+                    if (stock.color != null)
+                      Text(
+                        'Warna: ${stock.color}',
+                        style: TextStyle(
+                          color: Colors.grey[800],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                   ],
                 ),
               ),

@@ -89,6 +89,9 @@ class RackStock {
   final String code;
   final String name;
   final String? warehouse;
+
+  /// Warna yang ditetapkan untuk rak (null bila rak tidak dibatasi warna).
+  final String? color;
   final List<RackStockItem> items;
   final int total;
 
@@ -96,6 +99,7 @@ class RackStock {
     required this.code,
     required this.name,
     this.warehouse,
+    this.color,
     required this.items,
     required this.total,
   });
@@ -106,6 +110,7 @@ class RackStock {
       code: rack['code'] as String,
       name: rack['name'] as String,
       warehouse: rack['warehouse'] as String?,
+      color: rack['color'] as String?,
       items: (json['items'] as List<dynamic>? ?? [])
           .map((e) => RackStockItem.fromJson(e as Map<String, dynamic>))
           .toList(),
