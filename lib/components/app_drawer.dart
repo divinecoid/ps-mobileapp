@@ -294,6 +294,19 @@ class _AppDrawerState extends State<AppDrawer> {
                             vertical: 4,
                           ),
                           child: _buildScanSubmenuItem(
+                            title: 'Outbound Manual',
+                            icon: Icons.outbox,
+                            color: Colors.teal.shade100,
+                            iconColor: Colors.teal.shade700,
+                            onTap: () => _handleMenuTap('outbound_manual'),
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          child: _buildScanSubmenuItem(
                             title: 'Inbound',
                             icon: Icons.input,
                             color: Colors.blue.shade100,

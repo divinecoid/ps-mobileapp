@@ -7,6 +7,7 @@ import '../screens/inbound_screen.dart';
 import '../screens/checker_screen.dart';
 import '../screens/reject_screen.dart';
 import '../screens/mutation_screen.dart';
+import '../screens/manual_outbound_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/bluetooth_pairing_screen.dart';
 import '../screens/stock_check_screen.dart';
@@ -117,6 +118,15 @@ class NavigationHelper {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => MutationScreen()),
+          );
+        }
+        return true;
+
+      case 'outbound_manual':
+        if (currentScreen != 'manual_outbound') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const ManualOutboundScreen()),
           );
         }
         return true;
