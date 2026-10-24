@@ -83,19 +83,22 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         if (status.isPermanentlyDenied) await openAppSettings();
         return;
       }
+      // Pasang widget MobileScanner dulu; start() baru boleh dipanggil
+      // setelah controller ter-attach ke widget.
+      if (!mounted) return;
+      setState(() {
+        _isInitialized = true;
+        _errorMessage = null;
+      });
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
       await controller.start();
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-          _errorMessage = null;
-        });
-      }
     } catch (e) {
       print('Error starting scanner: $e');
       if (mounted) {
         setState(() {
           _errorMessage =
-              'Tidak dapat mengakses kamera. Pastikan izin kamera sudah diberikan.';
+              'Tidak dapat mengakses kamera. Pastikan izin kamera sudah diberikan.\n\nDetail: ${e is MobileScannerException ? '${e.errorCode.name} - ${e.errorDetails?.message ?? '-'}' : e}';
           _isInitialized = false;
         });
       }
