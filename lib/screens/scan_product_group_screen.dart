@@ -25,6 +25,8 @@ class _ScanProductGroupScreenState extends State<ScanProductGroupScreen>
   late GroupedProductItem _currentGroup;
   late GroupedProductItem _originalGroup; // Backup of original state
   bool _isLoading = false;
+  // Seri yang sudah dikonfirmasi preparist untuk tetap diambil (tidak ditanya lagi)
+  final Set<String> _confirmedSeries = {};
   Function(String, {bool isError})?
   _showScannerToast; // Callback to show toast in scanner
 
@@ -130,6 +132,17 @@ class _ScanProductGroupScreenState extends State<ScanProductGroupScreen>
       if (!mounted) return;
 
       if (response['success'] == true) {
+        // 5. Saran FIFO: ada seri lebih lama yang masih ada stok? (tidak memblokir)
+        final proceed = await _confirmOlderSeries(response['data']);
+        if (!mounted) return;
+        if (!proceed) {
+          _showScannerToast?.call(
+            'Scan dibatalkan. Ambil seri yang lebih lama dulu.',
+            isError: true,
+          );
+          return;
+        }
+
         // Add barcode to scanned list
         final newScannedCount = _currentGroup.scannedBarcodes.length + 1;
         final isNowComplete = newScannedCount == _currentGroup.requiredQuantity;
@@ -172,6 +185,112 @@ class _ScanProductGroupScreenState extends State<ScanProductGroupScreen>
         });
       }
     }
+  }
+
+  /// Tampilkan peringatan jika ada seri lebih lama yang masih ada stok.
+  /// Return true jika scan boleh dilanjutkan (tidak ada seri lama / user tetap ambil).
+  Future<bool> _confirmOlderSeries(dynamic data) async {
+    if (data is! Map) return true;
+
+    final product = data['product'];
+    final series = product is Map ? product['series']?.toString() : null;
+    final older = data['older_series'];
+    if (series == null || older is! List || older.isEmpty) return true;
+    if (_confirmedSeries.contains(series)) return true;
+
+    final oldest = older.first is Map ? older.first as Map : null;
+    final oldestSeries = oldest?['series']?.toString() ?? '-';
+
+    final keep = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: Colors.orange,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.warning_amber, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Seri Lama Masih Ada',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Anda scan seri $series untuk ${_currentGroup.displayName}, '
+              'tapi seri yang lebih lama masih ada stok:',
+              style: const TextStyle(fontSize: 15),
+            ),
+            const SizedBox(height: 12),
+            ...older.whereType<Map>().map((o) {
+              final racks = (o['racks'] is List) ? (o['racks'] as List) : const [];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Seri ${o['series']}: ${o['qty']} pcs'
+                    '${racks.isNotEmpty ? ' • Rak ${racks.join(', ')}' : ''}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.orange.shade900,
+                    ),
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+            Text(
+              'Disarankan habiskan seri $oldestSeries dulu.',
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'Ambil Seri $oldestSeries',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Tetap Ambil Seri $series'),
+          ),
+        ],
+      ),
+    );
+
+    if (keep == true) {
+      _confirmedSeries.add(series);
+      return true;
+    }
+    return false;
   }
 
   void _removeBarcode(int index) {
