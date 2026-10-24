@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../utils/sound_service.dart';
 
 enum ScanType { barcode, qrCode }
@@ -68,6 +69,20 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
 
   Future<void> _startScanner() async {
     try {
+      // Munculkan dialog izin kamera secara eksplisit sebelum start.
+      final status = await Permission.camera.request();
+      if (!status.isGranted) {
+        if (mounted) {
+          setState(() {
+            _errorMessage = status.isPermanentlyDenied
+                ? 'Izin kamera ditolak permanen. Aktifkan lewat Pengaturan aplikasi.'
+                : 'Izin kamera diperlukan untuk scan.';
+            _isInitialized = false;
+          });
+        }
+        if (status.isPermanentlyDenied) await openAppSettings();
+        return;
+      }
       await controller.start();
       if (mounted) {
         setState(() {
